@@ -16,8 +16,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
 	login: async (username: string, password: string) => {
 		const { data } = await api.post("/auth/login", { username, password })
-		localStorage.setItem("accessToken", data.access_token)
-		set({ user: data.user })
+		// NestJS returns accessToken (camelCase); guard against both forms
+		const token = data.access_token ?? data.accessToken ?? data.token
+		if (!token) throw new Error("Login response did not contain a token")
+		localStorage.setItem("accessToken", token)
+		// Set isLoading: false so DashboardLayoutInner doesn't need a second round-trip
+		set({ user: data.user ?? null, isLoading: false })
 	},
 
 	logout: () => {
@@ -28,8 +32,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
 	checkAuth: async () => {
 		const token = localStorage.getItem("accessToken")
-		if (!token) {
-			set({ isLoading: false })
+		if (!token || token === "undefined" || token === "null") {
+			localStorage.removeItem("accessToken")
+			set({ user: null, isLoading: false })
 			return
 		}
 		try {

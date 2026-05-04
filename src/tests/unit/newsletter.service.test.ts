@@ -4,14 +4,15 @@ import { http, HttpResponse } from "msw"
 import { newsletterService } from "@/services/newsletter.service"
 
 const API = "http://localhost:3000/api/v1"
+function wrap<T>(data: T) { return { success: true, timestamp: new Date().toISOString(), message: "OK", data } }
 
 const mockSub = { id: "s1", email: "test@example.com", is_active: true, subscribed_at: "2024-01-01T00:00:00Z", unsubscribed_at: null }
 
 const server = setupServer(
-	http.get(`${API}/newsletter/subscribers`, () => HttpResponse.json({ subscribers: [mockSub], total: 1 })),
-	http.post(`${API}/newsletter/subscribe`, () => HttpResponse.json({ message: "Subscribed" }, { status: 201 })),
-	http.post(`${API}/newsletter/unsubscribe`, () => HttpResponse.json({ message: "Unsubscribed" }, { status: 201 })),
-	http.delete(`${API}/newsletter/subscribers/s1`, () => HttpResponse.json({ message: "Deleted" })),
+	http.get(`${API}/newsletter/subscribers`, () => HttpResponse.json(wrap({ subscribers: [mockSub], total: 1 }))),
+	http.post(`${API}/newsletter/subscribe`, () => HttpResponse.json(wrap({ message: "Subscribed" }), { status: 201 })),
+	http.post(`${API}/newsletter/unsubscribe`, () => HttpResponse.json(wrap({ message: "Unsubscribed" }), { status: 201 })),
+	http.delete(`${API}/newsletter/subscribers/s1`, () => HttpResponse.json(wrap({ message: "Deleted" }))),
 )
 
 beforeAll(() => server.listen())
@@ -24,17 +25,14 @@ describe("newsletterService", () => {
 		expect(data.subscribers).toHaveLength(1)
 		expect(data.subscribers[0].email).toBe("test@example.com")
 	})
-
 	it("subscribes an email", async () => {
 		const { data } = await newsletterService.subscribe("test@example.com")
 		expect(data.message).toBe("Subscribed")
 	})
-
 	it("unsubscribes an email", async () => {
 		const { data } = await newsletterService.unsubscribe("test@example.com")
 		expect(data.message).toBe("Unsubscribed")
 	})
-
 	it("deletes a subscriber record", async () => {
 		const { data } = await newsletterService.remove("s1")
 		expect(data.message).toBe("Deleted")

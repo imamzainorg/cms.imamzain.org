@@ -7,6 +7,20 @@ import { toast, Toaster } from "sonner"
 import { AxiosError } from "axios"
 import { Loader2, Lock, User } from "lucide-react"
 
+function extractMessage(error: unknown): string {
+	if (error instanceof AxiosError) {
+		const d = error.response?.data
+		if (!d) return `Network error (${error.code ?? "no response"})`
+		const msg = d.message
+		if (Array.isArray(msg)) return msg.join(" · ")
+		if (typeof msg === "string" && msg) return msg
+		// Surface the whole object so we can see what the API returned
+		return `HTTP ${error.response?.status}: ${JSON.stringify(d).slice(0, 120)}`
+	}
+	if (error instanceof Error) return error.message
+	return "Login failed"
+}
+
 export default function LoginPage() {
 	const router = useRouter()
 	const login = useAuthStore((state) => state.login)
@@ -22,11 +36,8 @@ export default function LoginPage() {
 			toast.success("Login successful!")
 			router.push("/dashboard")
 		} catch (error: unknown) {
-			if (error instanceof AxiosError) {
-				toast.error(error.response?.data?.message || "Login failed")
-			} else {
-				toast.error("Login failed")
-			}
+			console.error("[login] error:", error)
+			toast.error(extractMessage(error))
 		} finally {
 			setIsLoading(false)
 		}

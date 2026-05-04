@@ -20,14 +20,27 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-	(response) => response,
+	(response) => {
+		// Unwrap the API envelope: { success, timestamp, message, data: <payload> }
+		// so every caller receives the actual payload in response.data
+		const d = response.data
+		if (
+			d !== null &&
+			typeof d === "object" &&
+			"success" in d &&
+			"data" in d
+		) {
+			response.data = d.data
+		}
+		return response
+	},
 	(error) => {
 		if (error.response?.status === 401 && typeof window !== "undefined") {
 			localStorage.removeItem("accessToken")
 			try {
 				window.location.href = "/login"
 			} catch {
-				// jsdom does not support navigation; silently ignore in test environments
+				// jsdom in test environments does not support navigation
 			}
 		}
 		return Promise.reject(error)

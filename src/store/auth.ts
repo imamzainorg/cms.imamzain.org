@@ -15,12 +15,22 @@ export const useAuthStore = create<AuthStore>((set) => ({
 	isLoading: true,
 
 	login: async (username: string, password: string) => {
+		// api.ts interceptor unwraps the envelope, so data IS the payload
 		const { data } = await api.post("/auth/login", { username, password })
-		// NestJS returns accessToken (camelCase); guard against both forms
-		const token = data.access_token ?? data.accessToken ?? data.token
-		if (!token) throw new Error("Login response did not contain a token")
-		localStorage.setItem("accessToken", token)
-		// Set isLoading: false so DashboardLayoutInner doesn't need a second round-trip
+
+		const token =
+			data.access_token ??
+			data.accessToken ??
+			data.token ??
+			data.jwt
+
+		if (!token) {
+			throw new Error(
+				`No token in response. Got keys: ${Object.keys(data ?? {}).join(", ")}`
+			)
+		}
+
+		localStorage.setItem("accessToken", String(token))
 		set({ user: data.user ?? null, isLoading: false })
 	},
 
@@ -38,6 +48,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
 			return
 		}
 		try {
+			// /auth/me returns the user object directly (after envelope unwrap)
 			const { data } = await api.get("/auth/me")
 			set({ user: data, isLoading: false })
 		} catch {

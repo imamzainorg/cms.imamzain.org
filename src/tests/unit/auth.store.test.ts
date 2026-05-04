@@ -4,38 +4,27 @@ import { http, HttpResponse } from "msw"
 import { useAuthStore } from "@/store/auth"
 
 const API = "http://localhost:3000/api/v1"
+function wrap<T>(data: T) { return { success: true, timestamp: new Date().toISOString(), message: "OK", data } }
 
-const mockUser = {
-	id: "u1",
-	username: "admin",
-	is_active: true,
-	created_at: "2024-01-01T00:00:00Z",
-	updated_at: "2024-01-01T00:00:00Z",
-	roles: [],
-}
+const mockUser = { id: "u1", username: "admin", is_active: true, created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z", roles: [] }
 
 const server = setupServer(
 	http.post(`${API}/auth/login`, async ({ request }) => {
 		const body = await request.json() as { username: string; password: string }
 		if (body.username === "admin" && body.password === "secret") {
-			// NestJS returns camelCase
-			return HttpResponse.json({ accessToken: "tok123", user: mockUser })
+			return HttpResponse.json(wrap({ accessToken: "tok123", user: mockUser }))
 		}
-		return HttpResponse.json({ message: "Invalid credentials" }, { status: 401 })
+		return HttpResponse.json({ success: false, message: "Invalid credentials" }, { status: 401 })
 	}),
 	http.get(`${API}/auth/me`, ({ request }) => {
 		const auth = request.headers.get("Authorization")
-		if (auth === "Bearer tok123") return HttpResponse.json(mockUser)
-		return HttpResponse.json({ message: "Unauthorized" }, { status: 401 })
+		if (auth === "Bearer tok123") return HttpResponse.json(wrap(mockUser))
+		return HttpResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
 	}),
 )
 
 beforeAll(() => server.listen())
-afterEach(() => {
-	server.resetHandlers()
-	localStorage.clear()
-	useAuthStore.setState({ user: null, isLoading: true })
-})
+afterEach(() => { server.resetHandlers(); localStorage.clear(); useAuthStore.setState({ user: null, isLoading: true }) })
 afterAll(() => server.close())
 
 describe("useAuthStore", () => {
@@ -65,7 +54,7 @@ describe("useAuthStore", () => {
 		expect(localStorage.getItem("accessToken")).toBeNull()
 	})
 
-	it("checkAuth skips request and clears state when token is the string 'undefined'", async () => {
+	it("checkAuth treats stored 'undefined' string as missing token", async () => {
 		localStorage.setItem("accessToken", "undefined")
 		await useAuthStore.getState().checkAuth()
 		expect(useAuthStore.getState().user).toBeNull()

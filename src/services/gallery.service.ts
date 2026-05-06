@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { GalleryImage, GalleryCategory } from "@/types"
+import type { GalleryImage, GalleryCategory, PaginatedResponse } from "@/types"
 
 export const galleryService = {
 	list: (params?: {
@@ -8,36 +8,39 @@ export const galleryService = {
 		category_id?: string
 		tags?: string[]
 		locations?: string[]
-	}) => api.get<{ images: GalleryImage[]; total: number }>("/gallery", { params }),
+	}) => api.get<PaginatedResponse<GalleryImage>>("/gallery", { params }),
 
 	get: (id: string) => api.get<GalleryImage>(`/gallery/${id}`),
 
 	create: (body: {
 		media_id: string
 		category_id?: string
+		taken_at?: string
+		author?: string
 		tags?: string[]
-		location?: string
+		locations?: string[]
 		translations?: {
 			lang: string
 			title?: string
-			caption?: string
-			is_default: boolean
+			description?: string
 		}[]
 	}) => api.post<GalleryImage>("/gallery", body),
 
 	update: (id: string, body: Partial<{
+		media_id: string
 		category_id: string
+		taken_at: string
+		author: string
 		tags: string[]
-		location: string
+		locations: string[]
 		translations: {
 			lang: string
 			title?: string
-			caption?: string
-			is_default: boolean
+			description?: string
 		}[]
 	}>) => api.patch<GalleryImage>(`/gallery/${id}`, body),
 
 	remove: (id: string) => api.delete(`/gallery/${id}`),
 
-	listCategories: () => api.get<{ categories: GalleryCategory[] }>("/gallery-categories"),
+	listCategories: () => api.get<PaginatedResponse<GalleryCategory>>("/gallery-categories"),
 }

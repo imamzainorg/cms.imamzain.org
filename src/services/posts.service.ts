@@ -1,9 +1,9 @@
 import { api } from "@/lib/api"
-import type { Post, PostCategory } from "@/types"
+import type { Post, PostCategory, PaginatedResponse } from "@/types"
 
 export const postsService = {
 	list: (params?: { page?: number; limit?: number; category_id?: string; search?: string }) =>
-		api.get<{ posts: Post[]; total: number }>("/posts/admin", { params }),
+		api.get<PaginatedResponse<Post>>("/posts/admin", { params }),
 
 	get: (id: string) => api.get<Post>(`/posts/${id}`),
 
@@ -17,9 +17,9 @@ export const postsService = {
 		translations: {
 			lang: string
 			title: string
+			summary?: string
 			body: string
 			slug: string
-			summary?: string
 			is_default: boolean
 		}[]
 		attachment_ids?: string[]
@@ -33,9 +33,9 @@ export const postsService = {
 		translations: {
 			lang: string
 			title: string
+			summary?: string
 			body: string
 			slug: string
-			summary?: string
 			is_default: boolean
 		}[]
 		attachment_ids: string[]
@@ -46,5 +46,5 @@ export const postsService = {
 
 	remove: (id: string) => api.delete(`/posts/${id}`),
 
-	listCategories: () => api.get<{ categories: PostCategory[] }>("/post-categories"),
+	listCategories: () => api.get<PaginatedResponse<PostCategory>>("/post-categories"),
 }

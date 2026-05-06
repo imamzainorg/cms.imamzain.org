@@ -12,9 +12,9 @@ import { Loader2, Plus, Trash2, Globe } from "lucide-react"
 
 const translationSchema = z.object({
 	lang: z.string().min(2),
-	title: z.string().min(1, "Title is required"),
+	title: z.string().min(1, "العنوان مطلوب"),
 	abstract: z.string().optional(),
-	authors: z.array(z.string()).min(1, "At least one author required"),
+	authors: z.array(z.string()).min(1, "يجب إضافة مؤلف واحد على الأقل"),
 	keywords: z.array(z.string()),
 	publication_venue: z.string().optional(),
 	page_count: z.number().optional(),
@@ -22,7 +22,7 @@ const translationSchema = z.object({
 })
 
 const paperFormSchema = z.object({
-	category_id: z.string().min(1, "Category is required"),
+	category_id: z.string().min(1, "التصنيف مطلوب"),
 	published_year: z.string().optional(),
 	pdf_url: z.string().optional(),
 	translations: z.array(translationSchema).min(1),
@@ -35,7 +35,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const [isSaving, setIsSaving] = useState(false)
 	const [categories, setCategories] = useState<AcademicPaperCategory[]>([])
 	const [loadingCats, setLoadingCats] = useState(true)
-	const [activeLang, setActiveLang] = useState("en")
+	const [activeLang, setActiveLang] = useState("ar")
 	const [newAuthor, setNewAuthor] = useState("")
 	const [newKeyword, setNewKeyword] = useState("")
 
@@ -44,14 +44,15 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 			resolver: zodResolver(paperFormSchema),
 			defaultValues: paper
 				? {
-					category_id: paper.category_id,
+					category_id: paper.category_id ?? "",
 					published_year: paper.published_year ?? "",
 					pdf_url: paper.pdf_url ?? "",
-					translations: paper.translations.map((t) => ({
-						lang: t.lang, title: t.title,
+					translations: (paper.academic_paper_translations ?? []).map((t) => ({
+						lang: t.lang,
+						title: t.title,
 						abstract: t.abstract ?? undefined,
-						authors: t.authors,
-						keywords: t.keywords,
+						authors: t.authors ?? [],
+						keywords: t.keywords ?? [],
 						publication_venue: t.publication_venue ?? undefined,
 						page_count: t.page_count ?? undefined,
 						is_default: t.is_default,
@@ -60,7 +61,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				: {
 					category_id: "",
 					published_year: String(new Date().getFullYear()),
-					translations: [{ lang: "en", title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: true }],
+					translations: [{ lang: "ar", title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: true }],
 				},
 		})
 
@@ -69,15 +70,15 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 
 	useEffect(() => {
 		papersService.listCategories()
-			.then(({ data }) => setCategories(data.categories))
-			.catch(() => toast.error("Failed to load categories"))
+			.then(({ data }) => setCategories(data.items))
+			.catch(() => toast.error("فشل تحميل التصنيفات"))
 			.finally(() => setLoadingCats(false))
 	}, [])
 
 	const addTranslation = () => {
 		const used = translations.map((t) => t.lang)
-		const available = ["en", "ar", "fr", "es", "de"].filter((l) => !used.includes(l))
-		if (!available.length) { toast.error("No more languages available"); return }
+		const available = ["ar", "en", "fr", "es", "de"].filter((l) => !used.includes(l))
+		if (!available.length) { toast.error("لا توجد لغات إضافية متاحة"); return }
 		append({ lang: available[0], title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: false })
 		setActiveLang(available[0])
 	}
@@ -93,7 +94,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const addKeyword = (index: number) => {
 		if (!newKeyword.trim()) return
 		const curr = translations[index]?.keywords || []
-		if (curr.includes(newKeyword.trim())) { toast.error("Keyword already exists"); return }
+		if (curr.includes(newKeyword.trim())) { toast.error("الكلمة المفتاحية موجودة بالفعل"); return }
 		setValue(`translations.${index}.keywords`, [...curr, newKeyword.trim()])
 		setNewKeyword("")
 	}
@@ -105,14 +106,14 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		try {
 			if (paper) {
 				await papersService.update(paper.id, data)
-				toast.success("Paper updated")
+				toast.success("تم تحديث البحث")
 			} else {
 				await papersService.create(data as Parameters<typeof papersService.create>[0])
-				toast.success("Paper created")
+				toast.success("تم إنشاء البحث")
 			}
 			router.push("/dashboard/papers")
 			router.refresh()
-		} catch { toast.error("Failed to save paper") }
+		} catch { toast.error("فشل حفظ البحث") }
 		finally { setIsSaving(false) }
 	}
 
@@ -121,42 +122,43 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	return (
 		<form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
 			<div className="bg-white shadow-sm rounded-lg p-6 space-y-6">
-				<h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
+				<h3 className="text-lg font-medium text-gray-900">المعلومات الأساسية</h3>
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 					<div>
-						<label className="block text-sm font-medium text-gray-700">Category *</label>
+						<label className="block text-sm font-medium text-gray-700">التصنيف *</label>
 						<select {...register("category_id")} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
-							<option value="">Select a category</option>
+							<option value="">اختر تصنيفاً</option>
 							{categories.map((cat) => (
 								<option key={cat.id} value={cat.id}>
-									{cat.translations.find((t) => t.lang === "en")?.title || cat.translations[0]?.title || "Untitled"}
+									{cat.academic_paper_category_translations.find((t) => t.lang === "ar")?.name ||
+										cat.academic_paper_category_translations[0]?.name || "بدون اسم"}
 								</option>
 							))}
 						</select>
 						{errors.category_id && <p className="mt-1 text-sm text-red-600">{errors.category_id.message}</p>}
 					</div>
 					<div>
-						<label className="block text-sm font-medium text-gray-700">Published Year</label>
+						<label className="block text-sm font-medium text-gray-700">سنة النشر</label>
 						<input type="number" {...register("published_year")} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 					</div>
 					<div>
-						<label className="block text-sm font-medium text-gray-700">PDF URL</label>
-						<input {...register("pdf_url")} placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+						<label className="block text-sm font-medium text-gray-700">رابط PDF</label>
+						<input {...register("pdf_url")} dir="ltr" placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 					</div>
 				</div>
 			</div>
 
 			<div className="bg-white shadow-sm rounded-lg p-6">
 				<div className="flex items-center justify-between mb-4">
-					<h3 className="text-lg font-medium text-gray-900">Translations</h3>
-					<button type="button" onClick={addTranslation} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"><Plus className="h-4 w-4" />Add Language</button>
+					<h3 className="text-lg font-medium text-gray-900">الترجمات</h3>
+					<button type="button" onClick={addTranslation} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"><Plus className="h-4 w-4" />إضافة لغة</button>
 				</div>
 				<div className="flex gap-2 mb-6 border-b border-gray-200">
 					{fields.map((field, index) => (
 						<button key={field.id} type="button" onClick={() => setActiveLang(translations[index]?.lang)}
 							className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeLang === translations[index]?.lang ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
 							<Globe className="inline h-4 w-4 mr-1" />{translations[index]?.lang.toUpperCase()}
-							{translations[index]?.is_default && <span className="ml-1 text-xs text-gray-400">(Default)</span>}
+							{translations[index]?.is_default && <span className="ml-1 text-xs text-gray-400">(الافتراضية)</span>}
 							{fields.length > 1 && <span onClick={(e) => { e.stopPropagation(); remove(index); if (activeLang === translations[index]?.lang) setActiveLang(translations[0]?.lang) }} className="ml-2 text-gray-400 hover:text-red-500"><Trash2 className="inline h-3 w-3" /></span>}
 						</button>
 					))}
@@ -165,31 +167,31 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 					<div key={field.id} className={activeLang === translations[index]?.lang ? "block space-y-4" : "hidden"}>
 						<div className="grid grid-cols-2 gap-4">
 							<div>
-								<label className="block text-sm font-medium text-gray-700">Language *</label>
+								<label className="block text-sm font-medium text-gray-700">اللغة *</label>
 								<select {...register(`translations.${index}.lang`)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
-									<option value="en">English</option><option value="ar">Arabic</option><option value="fr">French</option><option value="es">Spanish</option><option value="de">German</option>
+									<option value="ar">العربية</option><option value="en">الإنجليزية</option><option value="fr">الفرنسية</option><option value="es">الإسبانية</option><option value="de">الألمانية</option>
 								</select>
 							</div>
 							<div className="flex items-end">
 								<label className="flex items-center gap-2">
 									<input type="checkbox" {...register(`translations.${index}.is_default`)} onChange={(e) => { if (e.target.checked) fields.forEach((_, i) => { if (i !== index) setValue(`translations.${i}.is_default`, false) }) }} className="h-4 w-4 text-primary rounded" />
-									<span className="text-sm">Default Language</span>
+									<span className="text-sm">اللغة الافتراضية</span>
 								</label>
 							</div>
 						</div>
 						<div>
-							<label className="block text-sm font-medium text-gray-700">Title *</label>
+							<label className="block text-sm font-medium text-gray-700">العنوان *</label>
 							<input {...register(`translations.${index}.title`)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
 						</div>
 						<div>
-							<label className="block text-sm font-medium text-gray-700">Abstract</label>
+							<label className="block text-sm font-medium text-gray-700">الملخص</label>
 							<textarea {...register(`translations.${index}.abstract`)} rows={4} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 						</div>
 						<div>
-							<label className="block text-sm font-medium text-gray-700">Authors *</label>
+							<label className="block text-sm font-medium text-gray-700">المؤلفون *</label>
 							<div className="flex gap-2 mt-1">
-								<input value={newAuthor} onChange={(e) => setNewAuthor(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAuthor(index) } }} placeholder="Add author, press Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input value={newAuthor} onChange={(e) => setNewAuthor(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAuthor(index) } }} placeholder="أضف مؤلفاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 								<button type="button" onClick={() => addAuthor(index)} className="px-3 py-2 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 							</div>
 							<div className="mt-2 flex flex-wrap gap-2">
@@ -202,9 +204,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 							{errors.translations?.[index]?.authors && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.authors?.message}</p>}
 						</div>
 						<div>
-							<label className="block text-sm font-medium text-gray-700">Keywords</label>
+							<label className="block text-sm font-medium text-gray-700">الكلمات المفتاحية</label>
 							<div className="flex gap-2 mt-1">
-								<input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(index) } }} placeholder="Add keyword, press Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(index) } }} placeholder="أضف كلمة مفتاحية، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 								<button type="button" onClick={() => addKeyword(index)} className="px-3 py-2 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 							</div>
 							<div className="mt-2 flex flex-wrap gap-2">
@@ -217,11 +219,11 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div>
-								<label className="block text-sm font-medium text-gray-700">Publication Venue</label>
-								<input {...register(`translations.${index}.publication_venue`)} placeholder="Journal / conference" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<label className="block text-sm font-medium text-gray-700">مكان النشر</label>
+								<input {...register(`translations.${index}.publication_venue`)} placeholder="مجلة / مؤتمر" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							</div>
 							<div>
-								<label className="block text-sm font-medium text-gray-700">Page Count</label>
+								<label className="block text-sm font-medium text-gray-700">عدد الصفحات</label>
 								<input type="number" {...register(`translations.${index}.page_count`, { valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							</div>
 						</div>
@@ -231,9 +233,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 
 			<div className="flex gap-3">
 				<button type="submit" disabled={isSaving} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-medium rounded-md hover:bg-primary/90 disabled:opacity-50">
-					{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{isSaving ? "Saving..." : paper ? "Update Paper" : "Create Paper"}
+					{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{isSaving ? "جارٍ الحفظ..." : paper ? "تحديث البحث" : "إنشاء بحث"}
 				</button>
-				<button type="button" onClick={() => router.push("/dashboard/papers")} disabled={isSaving} className="px-6 py-2.5 border border-gray-300 font-medium rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+				<button type="button" onClick={() => router.push("/dashboard/papers")} disabled={isSaving} className="px-6 py-2.5 border border-gray-300 font-medium rounded-md text-gray-700 hover:bg-gray-50">إلغاء</button>
 			</div>
 		</form>
 	)

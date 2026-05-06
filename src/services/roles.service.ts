@@ -1,8 +1,8 @@
 import { api } from "@/lib/api"
-import type { Role, Permission } from "@/types"
+import type { Role, Permission, PaginatedResponse } from "@/types"
 
 export const rolesService = {
-	list: () => api.get<{ roles: Role[] }>("/roles"),
+	list: () => api.get<PaginatedResponse<Role>>("/roles"),
 
 	get: (id: string) => api.get<Role>(`/roles/${id}`),
 
@@ -14,7 +14,7 @@ export const rolesService = {
 
 	remove: (id: string) => api.delete(`/roles/${id}`),
 
-	listPermissions: () => api.get<{ permissions: Permission[] }>("/roles/permissions"),
+	listPermissions: () => api.get<PaginatedResponse<Permission>>("/roles/permissions"),
 
 	assignPermission: (roleId: string, permissionId: string) =>
 		api.post(`/roles/${roleId}/permissions`, { permissionId }),

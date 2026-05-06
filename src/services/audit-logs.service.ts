@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { AuditLog } from "@/types"
+import type { AuditLog, PaginatedResponse } from "@/types"
 
 export const auditLogsService = {
 	list: (params?: {
@@ -10,5 +10,5 @@ export const auditLogsService = {
 		resource_type?: string
 		from?: string
 		to?: string
-	}) => api.get<{ logs: AuditLog[]; total: number }>("/audit-logs", { params }),
+	}) => api.get<PaginatedResponse<AuditLog>>("/audit-logs", { params }),
 }

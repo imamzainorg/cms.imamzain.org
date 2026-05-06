@@ -1,9 +1,9 @@
 import { api } from "@/lib/api"
-import type { MediaRecord } from "@/types"
+import type { MediaRecord, PaginatedResponse } from "@/types"
 
 export const mediaService = {
 	list: (params?: { page?: number; limit?: number }) =>
-		api.get<{ media: MediaRecord[]; total: number }>("/media", { params }),
+		api.get<PaginatedResponse<MediaRecord>>("/media", { params }),
 
 	get: (id: string) => api.get<MediaRecord>(`/media/${id}`),
 
@@ -20,7 +20,7 @@ export const mediaService = {
 		height?: number
 	}) => api.post<MediaRecord>("/media/confirm", body),
 
-	update: (id: string, body: Partial<{ filename: string; alt_text: string; mime_type: string; file_size: number; width: number; height: number }>) =>
+	update: (id: string, body: Partial<{ filename: string; alt_text: string }>) =>
 		api.patch<MediaRecord>(`/media/${id}`, body),
 
 	remove: (id: string) => api.delete(`/media/${id}`),

@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Cairo } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"] })
+const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo" })
 
 export const metadata: Metadata = {
-	title: "Imam Zain Alabideen CMS",
-	description: "Content Management System",
+	title: "نظام إدارة المحتوى - الإمام زين العابدين",
+	description: "نظام إدارة محتوى الإمام زين العابدين",
 }
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
 	children: React.ReactNode
 }) {
 	return (
-		<html lang="en">
-			<body className={inter.className}>
+		<html lang="ar" dir="rtl">
+			<body className={cairo.className}>
 				{children}
 			</body>
 		</html>

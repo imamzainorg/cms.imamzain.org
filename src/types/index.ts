@@ -1,40 +1,88 @@
 // --- Pagination ---
 
-export type PaginatedResponse<T> = {
-	data: T[]
-	total: number
+export type PaginationMeta = {
 	page: number
 	limit: number
+	total: number
+	pages: number
+}
+
+export type PaginatedResponse<T> = {
+	items: T[]
+	pagination: PaginationMeta
 }
 
 // --- Auth ---
 
-export type AdminUser = {
+export type LoginUser = {
+	id: string
+	username: string
+	roles: string[]
+	permissions: string[]
+}
+
+export type MeUser = {
+	id: string
+	username: string
+	created_at: string
+	roles: string[]
+	permissions: string[]
+}
+
+export type LoginResponse = {
+	accessToken: string
+	user: LoginUser
+}
+
+// --- Users ---
+
+export type UserRoleRef = {
+	id: string
+	name: string
+}
+
+export type UserRoleItem = {
+	roles: UserRoleRef
+}
+
+export type UserSummary = {
 	id: string
 	username: string
 	is_active: boolean
 	created_at: string
 	updated_at: string
-	roles: Role[]
+	user_roles: UserRoleItem[]
 }
 
-export type LoginResponse = {
-	access_token: string
-	user: AdminUser
+export type UserDetail = {
+	id: string
+	username: string
+	is_active: boolean
+	created_at: string
+	updated_at: string
+	user_roles: UserRoleItem[]
+	permissions: string[]
 }
+
+export type AdminUser = MeUser
 
 // --- Roles & Permissions ---
 
 export type Permission = {
 	id: string
 	name: string
-	translations: { lang: string; title: string; description: string | null }[]
+}
+
+export type RoleTranslationItem = {
+	lang: string
+	title: string
+	description: string | null
 }
 
 export type Role = {
 	id: string
 	name: string
-	translations: { lang: string; title: string; description: string | null }[]
+	role_translations: RoleTranslationItem[]
 	permissions: Permission[]
 }
 
@@ -43,20 +91,20 @@ export type Role = {
 export type Language = {
 	code: string
 	name: string
+	native_name: string
 	is_active: boolean
-	is_rtl: boolean
+	created_at: string
 }
 
 // --- Media ---
 
 export type MediaRecord = {
 	id: string
-	key: string
-	url: string
 	filename: string
-	alt_text: string | null
+	url: string
 	mime_type: string
 	file_size: number
+	alt_text: string | null
 	width: number | null
 	height: number | null
 	created_at: string
@@ -64,7 +112,7 @@ export type MediaRecord = {
 
 // --- Gallery ---
 
-export type GalleryTranslation = {
+export type GalleryImageTranslationItem = {
 	lang: string
 	title: string | null
 	caption: string | null
@@ -72,23 +120,28 @@ export type GalleryTranslation = {
 }
 
 export type GalleryImage = {
-	media_id: string
-	category_id: string | null
-	tags: string[]
-	location: string | null
-	translations: GalleryTranslation[]
-	media: MediaRecord
-	category?: { id: string; translations: { lang: string; title: string }[] }
+	id: string
+	image_url: string | null
+	display_order: number
+	created_at: string
+	gallery_image_translations: GalleryImageTranslationItem[]
+}
+
+export type GalleryCategoryTranslationItem = {
+	lang: string
+	name: string
+	is_default: boolean
 }
 
 export type GalleryCategory = {
 	id: string
-	translations: { lang: string; title: string; slug: string; description: string | null }[]
+	created_at: string
+	gallery_category_translations: GalleryCategoryTranslationItem[]
 }
 
 // --- Posts ---
 
-export type PostTranslation = {
+export type PostTranslationItem = {
 	lang: string
 	title: string
 	summary: string | null
@@ -97,9 +150,16 @@ export type PostTranslation = {
 	is_default: boolean
 }
 
+export type PostCategoryTranslationItem = {
+	lang: string
+	name: string
+	is_default: boolean
+}
+
 export type PostCategory = {
 	id: string
-	translations: { lang: string; title: string; slug: string; description: string | null }[]
+	created_at: string
+	post_category_translations: PostCategoryTranslationItem[]
 }
 
 export type Post = {
@@ -111,15 +171,13 @@ export type Post = {
 	views: number
 	created_at: string
 	updated_at: string
-	translations: PostTranslation[]
-	category?: PostCategory
-	cover_image?: MediaRecord
-	attachments?: MediaRecord[]
+	post_translations: PostTranslationItem[]
+	translation: PostTranslationItem | null
 }
 
 // --- Books ---
 
-export type BookTranslation = {
+export type BookTranslationItem = {
 	lang: string
 	title: string
 	author: string | null
@@ -129,9 +187,16 @@ export type BookTranslation = {
 	is_default: boolean
 }
 
+export type BookCategoryTranslationItem = {
+	lang: string
+	name: string
+	is_default: boolean
+}
+
 export type BookCategory = {
 	id: string
-	translations: { lang: string; title: string; slug: string; description: string | null }[]
+	created_at: string
+	book_category_translations: BookCategoryTranslationItem[]
 }
 
 export type Book = {
@@ -146,14 +211,13 @@ export type Book = {
 	views: number
 	created_at: string
 	updated_at: string
-	translations: BookTranslation[]
-	category?: BookCategory
-	cover_image?: MediaRecord
+	book_translations: BookTranslationItem[]
+	translation: BookTranslationItem | null
 }
 
 // --- Academic Papers ---
 
-export type AcademicPaperTranslation = {
+export type AcademicPaperTranslationItem = {
 	lang: string
 	title: string
 	abstract: string | null
@@ -164,9 +228,16 @@ export type AcademicPaperTranslation = {
 	is_default: boolean
 }
 
+export type AcademicPaperCategoryTranslationItem = {
+	lang: string
+	name: string
+	is_default: boolean
+}
+
 export type AcademicPaperCategory = {
 	id: string
-	translations: { lang: string; title: string; slug: string; description: string | null }[]
+	created_at: string
+	academic_paper_category_translations: AcademicPaperCategoryTranslationItem[]
 }
 
 export type AcademicPaper = {
@@ -176,8 +247,8 @@ export type AcademicPaper = {
 	pdf_url: string | null
 	created_at: string
 	updated_at: string
-	translations: AcademicPaperTranslation[]
-	category?: AcademicPaperCategory
+	academic_paper_translations: AcademicPaperTranslationItem[]
+	translation: AcademicPaperTranslationItem | null
 }
 
 // --- Forms: Contact ---
@@ -186,13 +257,9 @@ export type Contact = {
 	id: string
 	name: string
 	email: string
-	country: string | null
 	message: string
 	status: "NEW" | "RESPONDED" | "SPAM"
-	submitted_at: string
-	responded_at: string | null
-	responded_by: string | null
-	notes: string | null
+	created_at: string
 }
 
 // --- Forms: Proxy Visit ---
@@ -200,14 +267,10 @@ export type Contact = {
 export type ProxyVisit = {
 	id: string
 	name: string
-	email: string
 	phone: string | null
 	country: string | null
 	status: "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED"
-	submitted_at: string
-	processed_at: string | null
-	processed_by: string | null
-	notes: string | null
+	created_at: string
 }
 
 // --- Newsletter ---
@@ -216,8 +279,8 @@ export type Subscriber = {
 	id: string
 	email: string
 	is_active: boolean
-	subscribed_at: string
 	unsubscribed_at: string | null
+	created_at: string
 }
 
 // --- Audit Logs ---
@@ -228,21 +291,20 @@ export type AuditLog = {
 	action: string
 	resource_type: string
 	resource_id: string | null
-	metadata: Record<string, unknown> | null
+	ip_address: string | null
+	user_agent: string | null
+	changes: Record<string, unknown> | null
 	created_at: string
-	user?: { id: string; username: string }
+	users?: { id: string; username: string }
 }
 
 // --- Contest ---
 
 export type ContestAttempt = {
 	id: string
-	participant_name: string
-	participant_email: string
-	participant_phone: string | null
+	full_name: string
+	phone: string | null
 	score: number | null
-	total_questions: number
-	submitted: boolean
-	started_at: string
-	submitted_at: string | null
+	is_submitted: boolean
+	created_at: string
 }

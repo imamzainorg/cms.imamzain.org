@@ -28,7 +28,7 @@ export default function DashboardLayoutInner({
 	if (isLoading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center bg-gray-50">
-				<div className="text-lg text-gray-600">Loading...</div>
+				<div className="text-lg text-gray-600">جارٍ التحميل...</div>
 			</div>
 		)
 	}
@@ -39,7 +39,7 @@ export default function DashboardLayoutInner({
 		<>
 			<div className="min-h-screen bg-gray-50">
 				<Sidebar />
-				<div className="lg:pl-64">
+				<div className="lg:pr-64">
 					<Header />
 					<main className="py-6">
 						<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">{children}</div>

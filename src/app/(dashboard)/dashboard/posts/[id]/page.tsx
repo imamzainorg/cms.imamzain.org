@@ -20,11 +20,11 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
 	}, [id])
 
 	if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-	if (!post) return <p className="text-gray-500">Post not found.</p>
+	if (!post) return <p className="text-gray-500">لم يتم العثور على المقالة.</p>
 
 	return (
 		<div>
-			<h1 className="text-3xl font-bold text-gray-900 mb-6">Edit Post</h1>
+			<h1 className="text-3xl font-bold text-gray-900 mb-6">تعديل المقالة</h1>
 			<PostForm post={post} />
 		</div>
 	)

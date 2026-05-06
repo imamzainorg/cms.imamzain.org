@@ -11,6 +11,6 @@ export default function EditBookPage({ params }: { params: Promise<{ id: string 
 	const [isLoading, setIsLoading] = useState(true)
 	useEffect(() => { booksService.get(id).then(({ data }) => setBook(data)).catch(console.error).finally(() => setIsLoading(false)) }, [id])
 	if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-	if (!book) return <p className="text-gray-500">Book not found.</p>
-	return <div><h1 className="text-3xl font-bold text-gray-900 mb-6">Edit Book</h1><BookForm book={book} /></div>
+	if (!book) return <p className="text-gray-500">لم يتم العثور على الكتاب.</p>
+	return <div><h1 className="text-3xl font-bold text-gray-900 mb-6">تعديل الكتاب</h1><BookForm book={book} /></div>
 }

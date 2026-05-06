@@ -1,16 +1,16 @@
 import { api } from "@/lib/api"
-import type { ProxyVisit } from "@/types"
+import type { ProxyVisit, PaginatedResponse } from "@/types"
 
 export const proxyVisitsService = {
 	list: (params?: {
 		page?: number
 		limit?: number
 		status?: "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
-	}) => api.get<{ visits: ProxyVisit[]; total: number }>("/forms/proxy-visits", { params }),
+	}) => api.get<PaginatedResponse<ProxyVisit>>("/forms/proxy-visits", { params }),
 
 	update: (id: string, body: {
 		status: "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
-		notes?: string
+		processed_at?: string
 	}) => api.patch<ProxyVisit>(`/forms/proxy-visits/${id}`, body),
 
 	remove: (id: string) => api.delete(`/forms/proxy-visits/${id}`),

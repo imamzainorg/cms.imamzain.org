@@ -6,25 +6,25 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 
 const pageTitles: Record<string, string> = {
-	"/dashboard": "Dashboard",
-	"/dashboard/posts": "Posts",
-	"/dashboard/posts/new": "New Post",
-	"/dashboard/books": "Books",
-	"/dashboard/books/new": "New Book",
-	"/dashboard/papers": "Academic Papers",
-	"/dashboard/papers/new": "New Paper",
-	"/dashboard/gallery": "Media Gallery",
-	"/dashboard/media": "Media Library",
-	"/dashboard/contacts": "Contact Submissions",
-	"/dashboard/proxy-visits": "Proxy Visit Requests",
-	"/dashboard/newsletter": "Newsletter Subscribers",
-	"/dashboard/contest": "Contest Attempts",
-	"/dashboard/users": "Users",
-	"/dashboard/users/new": "New User",
-	"/dashboard/roles": "Roles & Permissions",
-	"/dashboard/languages": "Languages",
-	"/dashboard/audit-logs": "Audit Logs",
-	"/dashboard/settings": "Settings",
+	"/dashboard": "لوحة التحكم",
+	"/dashboard/posts": "المقالات",
+	"/dashboard/posts/new": "مقالة جديدة",
+	"/dashboard/books": "الكتب",
+	"/dashboard/books/new": "كتاب جديد",
+	"/dashboard/papers": "الأبحاث العلمية",
+	"/dashboard/papers/new": "بحث جديد",
+	"/dashboard/gallery": "معرض الصور",
+	"/dashboard/media": "مكتبة الوسائط",
+	"/dashboard/contacts": "رسائل التواصل",
+	"/dashboard/proxy-visits": "طلبات الزيارة بالوكالة",
+	"/dashboard/newsletter": "النشرة البريدية",
+	"/dashboard/contest": "المسابقات",
+	"/dashboard/users": "المستخدمون",
+	"/dashboard/users/new": "مستخدم جديد",
+	"/dashboard/roles": "الأدوار والصلاحيات",
+	"/dashboard/languages": "اللغات",
+	"/dashboard/audit-logs": "سجلات التدقيق",
+	"/dashboard/settings": "الإعدادات",
 }
 
 export default function Header() {
@@ -37,12 +37,12 @@ export default function Header() {
 		if (pathname.match(/\/dashboard\/[^/]+\/[^/]+$/)) {
 			const basePath = pathname.replace(/\/[^/]+$/, "")
 			const base = pageTitles[basePath]
-			return base ? `Edit ${base}` : "Edit"
+			return base ? `تعديل ${base}` : "تعديل"
 		}
 		for (const [path, title] of Object.entries(pageTitles)) {
 			if (pathname.startsWith(path) && path !== "/dashboard") return title
 		}
-		return "Dashboard"
+		return "لوحة التحكم"
 	}
 
 	return (
@@ -68,7 +68,7 @@ export default function Header() {
 							className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
 						>
 							<LogOut className="h-4 w-4" />
-							<span className="hidden sm:inline">Logout</span>
+							<span className="hidden sm:inline">تسجيل خروج</span>
 						</button>
 					</div>
 				</div>
@@ -76,7 +76,7 @@ export default function Header() {
 
 			{showMobileMenu && (
 				<div className="lg:hidden border-t border-gray-200 px-4 py-3">
-					<p className="text-sm text-gray-600">Signed in as: {user?.username}</p>
+					<p className="text-sm text-gray-600">مسجل الدخول كـ: {user?.username}</p>
 				</div>
 			)}
 		</header>

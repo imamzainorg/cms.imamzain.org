@@ -8,7 +8,7 @@ export const languagesService = {
 
 	create: (code: string) => api.post<Language>("/languages", { code }),
 
-	update: (code: string, body: { is_active?: boolean; is_rtl?: boolean }) =>
+	update: (code: string, body: { is_active?: boolean }) =>
 		api.patch<Language>(`/languages/${code}`, body),
 
 	remove: (code: string) => api.delete(`/languages/${code}`),

@@ -26,7 +26,7 @@ Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, and 
 ## Prerequisites
 
 - **Node.js** ≥ 18 or **Bun** ≥ 1.3
-- The backend API running locally (default: `http://localhost:3000`)
+- The backend API running locally (default: `http://localhost:3002`)
 
 ---
 

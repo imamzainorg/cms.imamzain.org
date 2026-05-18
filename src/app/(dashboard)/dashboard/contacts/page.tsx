@@ -1,121 +1,331 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { contactsService } from "@/services/contacts.service"
+import { useEffect, useState, useMemo } from "react"
 import type { Contact } from "@/types"
 import { toast } from "sonner"
-import { format } from "date-fns"
-import { Loader2, Mail, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { getErrorMessage } from "@/lib/api"
+import { safeFormat } from "@/lib/dates"
+import { buildWebmailComposeUrl } from "@/lib/webmail"
+import RichTextEditor from "@/components/ui/RichTextEditor"
+import { useConfirm } from "@/components/ui/ConfirmDialog"
+import {
+	Mail, MailOpen, AlertCircle, ShieldAlert, Search, Send, Trash2, Reply, Inbox, Archive,
+} from "lucide-react"
+import { ListSkeleton } from "@/components/ui/Skeleton"
+import {
+	useContactsList,
+	useContactCount,
+	useUpdateContact,
+	useDeleteContact,
+} from "@/lib/queries/contacts"
 
+type Filter = "" | "NEW" | "RESPONDED" | "SPAM"
+
+const STATUS_LABEL: Record<Contact["status"], string> = {
+	NEW: "جديدة",
+	RESPONDED: "تم الرد",
+	SPAM: "مزعجة",
+}
+
+const STATUS_BADGE: Record<Contact["status"], string> = {
+	NEW: "bg-blue-100 text-blue-800",
+	RESPONDED: "bg-green-100 text-green-800",
+	SPAM: "bg-gray-200 text-gray-700",
+}
+
+/**
+ * Contacts inbox.
+ *
+ * NOTE on replies: the backend currently only exposes status changes (NEW / RESPONDED / SPAM)
+ * via PATCH /forms/contacts/:id. There is no "send reply email" endpoint. The reply UI here
+ * lets the editor draft a response and copy it to clipboard / open in their mail client via
+ * mailto: — submitting marks the contact as RESPONDED. When the API gains a real send endpoint,
+ * wire `sendReply` below to it.
+ */
 export default function ContactsPage() {
-	const [contacts, setContacts] = useState<Contact[]>([])
-	const [isLoading, setIsLoading] = useState(true)
-	const [selected, setSelected] = useState<Contact | null>(null)
-	const [statusFilter, setStatusFilter] = useState<"" | "NEW" | "RESPONDED" | "SPAM">("")
+	const [filter, setFilter] = useState<Filter>("")
+	const [search, setSearch] = useState("")
+	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const { confirm, dialog } = useConfirm()
 
-	useEffect(() => { loadContacts() }, [statusFilter])
+	const newCount = useContactCount({ status: "NEW" })
+	const respondedCount = useContactCount({ status: "RESPONDED" })
+	const spamCount = useContactCount({ status: "SPAM" })
 
-	const loadContacts = async () => {
-		setIsLoading(true)
-		try {
-			const { data } = await contactsService.list({ status: statusFilter || undefined })
-			setContacts(data.items ?? [])
-		} catch { toast.error("فشل تحميل الرسائل") }
-		finally { setIsLoading(false) }
+	const contactsQuery = useContactsList({
+		status: filter || undefined,
+		limit: 100,
+	})
+	const contacts = useMemo(() => contactsQuery.data?.items ?? [], [contactsQuery.data])
+	const loading = contactsQuery.isLoading
+
+	const updateContact = useUpdateContact()
+	const deleteContact = useDeleteContact()
+
+	useEffect(() => {
+		if (contactsQuery.error) toast.error(getErrorMessage(contactsQuery.error, "فشل تحميل الرسائل"))
+	}, [contactsQuery.error])
+
+	// Derive `selected` from the live contacts list so it stays in sync with refetches
+	const selected = selectedId ? contacts.find((c) => c.id === selectedId) ?? null : null
+
+	const updateStatus = (id: string, status: Contact["status"]) => {
+		updateContact.mutate(
+			{ id, body: { status } },
+			{
+				onSuccess: () => toast.success("تم التحديث"),
+				onError: (e) => toast.error(getErrorMessage(e, "فشل التحديث")),
+			},
+		)
 	}
 
-	const updateStatus = async (id: string, status: Contact["status"]) => {
-		try {
-			await contactsService.update(id, { status })
-			toast.success("تم تحديث الحالة")
-			setSelected(null)
-			loadContacts()
-		} catch { toast.error("فشل تحديث الحالة") }
+	const handleDelete = async (id: string) => {
+		const ok = await confirm({
+			title: "حذف هذه الرسالة نهائياً؟",
+			description: "لا يمكن استرجاع الرسالة بعد الحذف.",
+			confirmText: "حذف",
+			tone: "danger",
+		})
+		if (!ok) return
+		deleteContact.mutate(id, {
+			onSuccess: () => {
+				toast.success("تم الحذف")
+				if (selectedId === id) setSelectedId(null)
+			},
+			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
+		})
 	}
 
-	const statusIcon = (s: Contact["status"]) => ({
-		NEW: <AlertCircle className="h-4 w-4 text-blue-600" />,
-		RESPONDED: <CheckCircle className="h-4 w-4 text-green-600" />,
-		SPAM: <XCircle className="h-4 w-4 text-red-600" />,
-	}[s])
+	const filtered = useMemo(() => {
+		const byStatus = filter ? contacts.filter((c) => c.status === filter) : contacts
+		const q = search.trim().toLowerCase()
+		if (!q) return byStatus
+		return byStatus.filter((c) =>
+			c.name.toLowerCase().includes(q) ||
+			c.email.toLowerCase().includes(q) ||
+			c.message.toLowerCase().includes(q)
+		)
+	}, [contacts, search, filter])
 
-	const statusClass = (s: Contact["status"]) => ({
-		NEW: "bg-blue-100 text-blue-800",
-		RESPONDED: "bg-green-100 text-green-800",
-		SPAM: "bg-red-100 text-red-800",
-	}[s])
-
-	const statusLabel = (s: Contact["status"]) => ({
-		NEW: "جديد",
-		RESPONDED: "تم الرد",
-		SPAM: "بريد مزعج",
-	}[s])
-
-	if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+	const tabs: Array<{ key: Filter; label: string; icon: typeof Inbox; badge?: number }> = [
+		{ key: "", label: "صندوق الوارد", icon: Inbox, badge: (newCount.data ?? 0) + (respondedCount.data ?? 0) },
+		{ key: "NEW", label: "جديدة", icon: AlertCircle, badge: newCount.data ?? 0 },
+		{ key: "RESPONDED", label: "تم الرد", icon: MailOpen, badge: respondedCount.data ?? 0 },
+		{ key: "SPAM", label: "مزعجة", icon: ShieldAlert, badge: spamCount.data ?? 0 },
+	]
 
 	return (
 		<div>
 			<h1 className="text-3xl font-bold text-gray-900 mb-6">رسائل التواصل</h1>
 
-			<div className="flex gap-2 mb-4">
-				{([["", "الكل"], ["NEW", "جديد"], ["RESPONDED", "تم الرد"], ["SPAM", "بريد مزعج"]] as const).map(([f, label]) => (
-					<button key={f} onClick={() => setStatusFilter(f as typeof statusFilter)}
-						className={`px-3 py-1.5 text-sm font-medium rounded-md ${statusFilter === f ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
-						{label}
-					</button>
-				))}
-			</div>
-
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				<div className="lg:col-span-2 bg-white shadow-sm rounded-lg overflow-hidden">
-					<table className="min-w-full divide-y divide-gray-200">
-						<thead className="bg-gray-50">
-							<tr>
-								<th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
-								<th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الإلكتروني</th>
-								<th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-								<th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
-							</tr>
-						</thead>
-						<tbody className="bg-white divide-y divide-gray-200">
-							{contacts.length === 0 ? (
-								<tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500"><Mail className="h-12 w-12 mx-auto mb-4 text-gray-300" /><p>لا توجد رسائل</p></td></tr>
-							) : contacts.map((c) => (
-								<tr key={c.id} onClick={() => setSelected(c)} className="cursor-pointer hover:bg-gray-50">
-									<td className="px-6 py-4 text-sm font-medium text-gray-900">{c.name}</td>
-									<td className="px-6 py-4 text-sm text-gray-500">{c.email}</td>
-									<td className="px-6 py-4">
-										<span className={`px-2 inline-flex items-center gap-1 text-xs leading-5 font-semibold rounded-full ${statusClass(c.status)}`}>
-											{statusIcon(c.status)}{statusLabel(c.status)}
+			<div className="bg-white border border-gray-200 rounded-xl overflow-hidden h-[calc(100vh-180px)] flex">
+				{/* Sidebar: folders */}
+				<div className="w-56 border-l border-gray-200 bg-gray-50/50 flex flex-col">
+					<div className="p-3 space-y-1">
+						{tabs.map((t) => {
+							const active = filter === t.key
+							return (
+								<button
+									key={t.key}
+									onClick={() => { setFilter(t.key); setSelectedId(null) }}
+									className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${active ? "bg-primary text-white" : "text-gray-700 hover:bg-white"}`}
+								>
+									<span className="flex items-center gap-2">
+										<t.icon className="h-4 w-4" />
+										{t.label}
+									</span>
+									{t.badge !== undefined && t.badge > 0 && (
+										<span className={`text-xs px-1.5 py-0.5 rounded-full ${active ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+											{t.badge}
 										</span>
-									</td>
-									<td className="px-6 py-4 text-sm text-gray-500">{c.created_at ? format(new Date(c.created_at), "dd/MM/yyyy") : "—"}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+									)}
+								</button>
+							)
+						})}
+					</div>
 				</div>
 
-				{selected && (
-					<div className="bg-white shadow-sm rounded-lg p-6 space-y-4">
-						<h3 className="text-lg font-medium text-gray-900">التفاصيل</h3>
-						<div><label className="text-sm font-medium text-gray-500">الاسم</label><p className="mt-1 text-sm text-gray-900">{selected.name}</p></div>
-						<div><label className="text-sm font-medium text-gray-500">البريد الإلكتروني</label><p className="mt-1 text-sm text-gray-900">{selected.email}</p></div>
-						<div><label className="text-sm font-medium text-gray-500">الرسالة</label><p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{selected.message}</p></div>
-						<div className="space-y-2 pt-2">
-							{selected.status !== "RESPONDED" && (
-								<button onClick={() => updateStatus(selected.id, "RESPONDED")} className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">تحديد كـ "تم الرد"</button>
-							)}
-							{selected.status !== "SPAM" && (
-								<button onClick={() => updateStatus(selected.id, "SPAM")} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">تحديد كـ "بريد مزعج"</button>
-							)}
-							{selected.status !== "NEW" && (
-								<button onClick={() => updateStatus(selected.id, "NEW")} className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">إعادة تعيين كـ "جديد"</button>
-							)}
+				{/* Message list */}
+				<div className={`${selected ? "hidden md:flex" : "flex"} flex-col w-full md:w-80 border-l border-gray-200`}>
+					<div className="p-3 border-b border-gray-100">
+						<div className="relative">
+							<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+							<input
+								value={search}
+								onChange={(e) => setSearch(e.target.value)}
+								placeholder="ابحث في الرسائل..."
+								className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+							/>
 						</div>
 					</div>
-				)}
+					<div className="flex-1 overflow-y-auto">
+						{loading ? (
+							<ListSkeleton rows={6} />
+						) : filtered.length === 0 ? (
+							<div className="text-center py-12 text-gray-500">
+								<Mail className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+								<p className="text-sm">لا توجد رسائل</p>
+							</div>
+						) : filtered.map((c) => {
+							const isSel = selected?.id === c.id
+							const isUnread = c.status === "NEW"
+							return (
+								<button
+									key={c.id}
+									onClick={() => setSelectedId(c.id)}
+									className={`w-full text-right px-4 py-3 border-b border-gray-100 transition-colors ${isSel ? "bg-primary/5 border-r-4 border-r-primary" : "hover:bg-gray-50"}`}
+								>
+									<div className="flex items-start justify-between gap-2 mb-1">
+										<div className="flex items-center gap-2 min-w-0">
+											<div className={`w-8 h-8 rounded-full ${isUnread ? "bg-primary text-white" : "bg-gray-200 text-gray-600"} flex items-center justify-center text-xs font-bold shrink-0`}>
+												{c.name[0]?.toUpperCase()}
+											</div>
+											<div className="min-w-0">
+												<p className={`text-sm truncate ${isUnread ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>{c.name}</p>
+												<p className="text-xs text-gray-500 truncate" dir="ltr">{c.email}</p>
+											</div>
+										</div>
+										<span className="text-[10px] text-gray-400 shrink-0 whitespace-nowrap">
+											{safeFormat(c.submitted_at ?? c.created_at, "dd/MM")}
+										</span>
+									</div>
+									<p className="text-xs text-gray-600 line-clamp-2 mr-10">{c.message}</p>
+								</button>
+							)
+						})}
+					</div>
+				</div>
+
+				{/* Detail / reply */}
+				<div className={`${selected ? "flex" : "hidden md:flex"} flex-col flex-1 bg-white`}>
+					{!selected ? (
+						<div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+							<Mail className="h-16 w-16 mb-3 text-gray-300" />
+							<p>اختر رسالة لقراءتها</p>
+						</div>
+					) : (
+						<ContactReadingPane
+							key={selected.id}
+							contact={selected}
+							onStatus={(s) => updateStatus(selected.id, s)}
+							onDelete={() => handleDelete(selected.id)}
+							onClose={() => setSelectedId(null)}
+						/>
+					)}
+				</div>
 			</div>
+			{dialog}
 		</div>
+	)
+}
+
+function ContactReadingPane({
+	contact,
+	onStatus,
+	onDelete,
+	onClose,
+}: {
+	contact: Contact
+	onStatus: (s: Contact["status"]) => void
+	onDelete: () => void
+	onClose: () => void
+}) {
+	const [reply, setReply] = useState("")
+	const [showReply, setShowReply] = useState(false)
+
+	const sendReply = () => {
+		// API doesn't expose "send email" — open the editor's webmail (Hostinger
+		// Roundcube by default) with the prefilled compose. We open a new tab so
+		// the CMS state survives the navigation; the editor lands in webmail's
+		// compose view (after login if needed).
+		const plain = reply.replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n\n").trim()
+		const url = buildWebmailComposeUrl({
+			to: contact.email,
+			subject: "رد: رسالتك إلى موقع الإمام زين العابدين",
+			body: plain,
+		})
+		window.open(url, "_blank", "noopener,noreferrer")
+		onStatus("RESPONDED")
+		setShowReply(false)
+		setReply("")
+	}
+
+	return (
+		<>
+			<div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+				<div className="min-w-0">
+					<button onClick={onClose} className="md:hidden text-sm text-gray-500 mb-2">← الرجوع</button>
+					<h2 className="text-lg font-semibold text-gray-900 truncate">رسالة من {contact.name}</h2>
+					<div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+						<span dir="ltr">{contact.email}</span>
+						<span>·</span>
+						<span>{safeFormat(contact.submitted_at ?? contact.created_at, "dd/MM/yyyy HH:mm")}</span>
+						<span className={`mr-2 px-2 py-0.5 text-[10px] rounded-full ${STATUS_BADGE[contact.status]}`}>
+							{STATUS_LABEL[contact.status]}
+						</span>
+					</div>
+				</div>
+				<div className="flex items-center gap-1 shrink-0">
+					{contact.status !== "RESPONDED" && (
+						<button onClick={() => onStatus("RESPONDED")} className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-md" title="تحديد كَ تم الرد"><Archive className="h-4 w-4" /></button>
+					)}
+					{contact.status !== "SPAM" && (
+						<button onClick={() => onStatus("SPAM")} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md" title="تحديد كَ مزعجة"><ShieldAlert className="h-4 w-4" /></button>
+					)}
+					<button onClick={onDelete} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md" title="حذف"><Trash2 className="h-4 w-4" /></button>
+				</div>
+			</div>
+
+			<div className="flex-1 overflow-y-auto p-6">
+				<div className="max-w-3xl">
+					<div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap leading-7">
+						{contact.message}
+					</div>
+
+					{!showReply ? (
+						<div className="mt-8 flex gap-2">
+							<button onClick={() => setShowReply(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90">
+								<Reply className="h-4 w-4" />الرد
+							</button>
+							<a
+								href={buildWebmailComposeUrl({
+									to: contact.email,
+									subject: "رد: رسالتك إلى موقع الإمام زين العابدين",
+								})}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50 text-gray-700"
+							>
+								<Mail className="h-4 w-4" />فتح في بريد Hostinger
+							</a>
+						</div>
+					) : (
+						<div className="mt-8 border border-gray-200 rounded-xl overflow-hidden">
+							<div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs text-gray-600 flex items-center justify-between">
+								<span>إلى: <span className="font-medium" dir="ltr">{contact.email}</span></span>
+								<span className="text-amber-600">⚠ سيُفتح بريد Hostinger لإتمام الإرسال الفعلي</span>
+							</div>
+							<RichTextEditor
+								value={reply}
+								onChange={setReply}
+								placeholder={`السلام عليكم ${contact.name}،\n\nشكراً لتواصلك معنا...`}
+								minHeight={220}
+								maxBytes={32 * 1024}
+							/>
+							<div className="flex justify-end gap-2 px-4 py-3 bg-gray-50/60 border-t border-gray-100">
+								<button onClick={() => { setShowReply(false); setReply("") }} className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-white text-gray-700">إلغاء</button>
+								<button
+									onClick={sendReply}
+									disabled={!reply.trim() || reply.trim() === "<p></p>"}
+									className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary text-white text-sm rounded-md hover:bg-primary/90 disabled:opacity-50"
+								>
+									<Send className="h-4 w-4" />إرسال وتحديد كَ &quot;تم الرد&quot;
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		</>
 	)
 }

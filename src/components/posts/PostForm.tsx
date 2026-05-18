@@ -2,27 +2,43 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { postsService } from "@/services/posts.service"
-import type { Post, PostCategory } from "@/types"
+import type { Post } from "@/types"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, Globe } from "lucide-react"
+import { getErrorMessage } from "@/lib/api"
+import { categoryName, slugify } from "@/lib/i18n"
+import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
+import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
+import { useCreatePost, useUpdatePost } from "@/lib/queries/posts"
+import { usePostCategoriesList } from "@/lib/queries/post-categories"
+import RichTextEditor from "@/components/ui/RichTextEditor"
+import MediaInput from "@/components/ui/MediaInput"
+import MediaPicker from "@/components/ui/MediaPicker"
+import { Loader2, Plus, Trash2, Globe, Eye, EyeOff, Calendar, Star, Sparkles } from "lucide-react"
 
 const translationSchema = z.object({
 	lang: z.string().min(2),
 	title: z.string().min(1, "العنوان مطلوب"),
 	summary: z.string().optional(),
-	body: z.string().min(1, "المحتوى مطلوب"),
+	body: z.string()
+		.min(1, "المحتوى مطلوب")
+		.refine((s) => byteLength(s) <= MAX_BODY_BYTES, {
+			message: `المحتوى كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب). اختصره أو اقسمه إلى مقالات.`,
+		}),
 	slug: z.string().min(1, "الرابط المختصر مطلوب"),
 	is_default: z.boolean(),
+	meta_title: z.string().max(80).optional(),
+	meta_description: z.string().max(180).optional(),
+	og_image_id: z.string().nullable().optional(),
 })
 
 const postFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
-	cover_image_id: z.string().optional(),
+	cover_image_id: z.string().nullable().optional(),
 	is_published: z.boolean(),
+	is_featured: z.boolean(),
 	published_at: z.string().optional(),
 	translations: z.array(translationSchema).min(1, "يجب إضافة ترجمة واحدة على الأقل"),
 })
@@ -31,221 +47,348 @@ type PostFormData = z.infer<typeof postFormSchema>
 
 export default function PostForm({ post }: { post?: Post }) {
 	const router = useRouter()
-	const [isSaving, setIsSaving] = useState(false)
-	const [categories, setCategories] = useState<PostCategory[]>([])
-	const [loadingCats, setLoadingCats] = useState(true)
+	const { languages } = useActiveLanguages()
+	const createPost = useCreatePost()
+	const updatePost = useUpdatePost()
+	const isSaving = createPost.isPending || updatePost.isPending
+	const categoriesQuery = usePostCategoriesList({ limit: 100 })
+	const categories = categoriesQuery.data?.items ?? []
+	const loadingCats = categoriesQuery.isLoading
 	const [activeLang, setActiveLang] = useState("ar")
+	const [imagePickerOpen, setImagePickerOpen] = useState<((url: string | null) => void) | null>(null)
 
-	const { register, handleSubmit, control, watch, setValue, formState: { errors } } =
+	const buildDefaults = (): PostFormData => {
+		if (!post) {
+			return {
+				category_id: "",
+				cover_image_id: null,
+				is_published: false,
+				is_featured: false,
+				translations: [{
+					lang: "ar", title: "", summary: "", body: "", slug: "", is_default: true,
+					meta_title: "", meta_description: "", og_image_id: null,
+				}],
+			}
+		}
+		const all = post.post_translations ?? []
+		const fallback = all.length === 0 && post.translation ? [post.translation] : all
+		return {
+			category_id: post.category_id ?? "",
+			cover_image_id: post.cover_image_id ?? null,
+			is_published: post.is_published,
+			is_featured: post.is_featured ?? false,
+			published_at: post.published_at ? new Date(post.published_at).toISOString().slice(0, 16) : undefined,
+			translations: fallback.length
+				? fallback.map((t) => ({
+					lang: t.lang,
+					title: t.title ?? "",
+					summary: t.summary ?? "",
+					body: t.body ?? "",
+					slug: t.slug ?? "",
+					is_default: t.is_default ?? false,
+					meta_title: t.meta_title ?? "",
+					meta_description: t.meta_description ?? "",
+					og_image_id: t.og_image_id ?? null,
+				}))
+				: [{
+					lang: "ar", title: "", summary: "", body: "", slug: "", is_default: true,
+					meta_title: "", meta_description: "", og_image_id: null,
+				}],
+		}
+	}
+
+	const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } =
 		useForm<PostFormData>({
 			resolver: zodResolver(postFormSchema),
-			defaultValues: post
-				? {
-					category_id: post.category_id ?? "",
-					cover_image_id: post.cover_image_id ?? undefined,
-					is_published: post.is_published,
-					published_at: post.published_at
-						? new Date(post.published_at).toISOString().slice(0, 16)
-						: undefined,
-					translations: (post.post_translations ?? []).map((t) => ({
-						lang: t.lang,
-						title: t.title,
-						summary: t.summary ?? undefined,
-						body: t.body,
-						slug: t.slug,
-						is_default: t.is_default,
-					})),
-				}
-				: {
-					category_id: "",
-					is_published: false,
-					translations: [{ lang: "ar", title: "", summary: "", body: "", slug: "", is_default: true }],
-				},
+			defaultValues: buildDefaults(),
 		})
+
+	useEffect(() => {
+		if (post) reset(buildDefaults())
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [post?.id])
+
+	useEffect(() => {
+		if (categoriesQuery.error) {
+			toast.error(getErrorMessage(categoriesQuery.error, "فشل تحميل التصنيفات"))
+		}
+	}, [categoriesQuery.error])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
 	const translations = watch("translations")
-
-	useEffect(() => {
-		postsService.listCategories()
-			.then(({ data }) => setCategories(data.items))
-			.catch(() => toast.error("فشل تحميل التصنيفات"))
-			.finally(() => setLoadingCats(false))
-	}, [])
-
-	const generateSlug = (title: string) =>
-		title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 60)
+	const isPublished = watch("is_published")
+	const isFeatured = watch("is_featured")
 
 	const handleTitleChange = (index: number, value: string) => {
 		const current = translations[index]?.slug
-		if (!current || current === generateSlug(translations[index]?.title || "")) {
-			setValue(`translations.${index}.slug`, generateSlug(value))
+		if (!current) {
+			setValue(`translations.${index}.slug`, slugify(value))
 		}
 	}
 
 	const addTranslation = () => {
 		const used = translations.map((t) => t.lang)
-		const available = ["ar", "en", "fr", "es", "de"].filter((l) => !used.includes(l))
-		if (!available.length) { toast.error("لا توجد لغات إضافية متاحة"); return }
-		append({ lang: available[0], title: "", summary: "", body: "", slug: "", is_default: false })
-		setActiveLang(available[0])
+		const next = languages.find((l) => !used.includes(l.code))
+		if (!next) { toast.error("لا توجد لغات إضافية متاحة"); return }
+		append({
+			lang: next.code, title: "", summary: "", body: "", slug: "", is_default: false,
+			meta_title: "", meta_description: "", og_image_id: null,
+		})
+		setActiveLang(next.code)
 	}
 
-	const onSubmit = async (data: PostFormData) => {
-		setIsSaving(true)
-		try {
-			if (post) {
-				await postsService.update(post.id, data)
-				toast.success("تم تحديث المقالة")
-			} else {
-				await postsService.create({
-					category_id: data.category_id,
-					cover_image_id: data.cover_image_id,
-					is_published: data.is_published,
-					published_at: data.published_at,
-					translations: data.translations,
-				})
-				toast.success("تم إنشاء المقالة")
-			}
-			router.push("/dashboard/posts")
-			router.refresh()
-		} catch {
-			toast.error("فشل حفظ المقالة")
-		} finally {
-			setIsSaving(false)
+	const pickImageForBody = (): Promise<string | null> => {
+		return new Promise((resolve) => {
+			setImagePickerOpen(() => resolve)
+		})
+	}
+
+	const onSubmit = (data: PostFormData) => {
+		const body = {
+			category_id: data.category_id,
+			cover_image_id: data.cover_image_id ?? undefined,
+			is_published: data.is_published,
+			is_featured: data.is_featured,
+			published_at: data.published_at || undefined,
+			translations: data.translations.map((t) => ({
+				...t,
+				summary: t.summary || undefined,
+				body: sanitizeEditorHtml(t.body),
+				slug: t.slug || slugify(t.title),
+				meta_title: t.meta_title || undefined,
+				meta_description: t.meta_description || undefined,
+				og_image_id: t.og_image_id ?? null,
+			})),
+		}
+		const handlers = {
+			onSuccess: () => {
+				toast.success(post ? "تم تحديث المقالة" : "تم إنشاء المقالة")
+				router.push("/dashboard/posts")
+				router.refresh()
+			},
+			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل حفظ المقالة")),
+		}
+		if (post) {
+			updatePost.mutate({ id: post.id, body }, handlers)
+		} else {
+			createPost.mutate(body, handlers)
 		}
 	}
 
 	if (loadingCats) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 
 	return (
-		<form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-			<div className="bg-white shadow-sm rounded-lg p-6 space-y-6">
-				<h3 className="text-lg font-medium text-gray-900">الإعدادات الأساسية</h3>
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div>
-						<label className="block text-sm font-medium text-gray-700">التصنيف *</label>
-						<select {...register("category_id")} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
+		<>
+			<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<div className="lg:col-span-2 space-y-6">
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6">
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-lg font-medium text-gray-900">المحتوى</h3>
+							<button type="button" onClick={addTranslation} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"><Plus className="h-4 w-4" />إضافة لغة</button>
+						</div>
+
+						<div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
+							{fields.map((field, index) => (
+								<button key={field.id} type="button" onClick={() => setActiveLang(translations[index]?.lang)}
+									className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeLang === translations[index]?.lang ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+									<Globe className="inline h-4 w-4 ml-1" />{languageLabel(translations[index]?.lang)}
+									{translations[index]?.is_default && <span className="mr-1 text-xs text-gray-400">(الافتراضية)</span>}
+									{fields.length > 1 && (
+										<span onClick={(e) => { e.stopPropagation(); remove(index); if (activeLang === translations[index]?.lang) setActiveLang(translations[0]?.lang) }} className="mr-2 text-gray-400 hover:text-red-500 cursor-pointer"><Trash2 className="inline h-3 w-3" /></span>
+									)}
+								</button>
+							))}
+						</div>
+
+						{fields.map((field, index) => (
+							<div key={field.id} className={activeLang === translations[index]?.lang ? "block space-y-4" : "hidden"}>
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+									<div>
+										<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
+										<select {...register(`translations.${index}.lang`)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+											{languages.map((l) => (
+												<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
+											))}
+										</select>
+									</div>
+									<div className="md:col-span-2 flex items-end">
+										<label className="flex items-center gap-2">
+											<input type="checkbox" {...register(`translations.${index}.is_default`)}
+												onChange={(e) => { if (e.target.checked) fields.forEach((_, i) => { if (i !== index) setValue(`translations.${i}.is_default`, false) }) }}
+												className="h-4 w-4 text-primary rounded" />
+											<span className="text-sm text-gray-900">اللغة الافتراضية</span>
+										</label>
+									</div>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">العنوان *</label>
+									<input
+										{...register(`translations.${index}.title`, { onChange: (e) => handleTitleChange(index, e.target.value) })}
+										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-lg"
+									/>
+									{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
+								</div>
+
+								<details className="text-sm">
+									<summary className="text-gray-500 cursor-pointer hover:text-gray-700 select-none">الرابط المختصر (slug)</summary>
+									<input {...register(`translations.${index}.slug`)} dir="ltr" className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs" />
+									<p className="mt-1 text-xs text-gray-400">يُولَّد تلقائياً من العنوان. عدّله فقط إن كنت تعرف ماذا تفعل.</p>
+								</details>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">الملخص</label>
+									<textarea {...register(`translations.${index}.summary`)} rows={2}
+										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+										placeholder="جملة أو جملتان تظهران في صفحة قائمة المقالات..."
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">المحتوى *</label>
+									<Controller
+										control={control}
+										name={`translations.${index}.body`}
+										render={({ field: f }) => (
+											<RichTextEditor
+												value={f.value}
+												onChange={f.onChange}
+												placeholder="ابدأ كتابة محتوى المقالة..."
+												dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+												onPickImage={pickImageForBody}
+												minHeight={400}
+											/>
+										)}
+									/>
+									{errors.translations?.[index]?.body && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.body?.message}</p>}
+								</div>
+
+								{/* SEO panel — per-translation override of OG/meta tags. */}
+								<details className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+									<summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none px-4 py-3 bg-linear-to-l from-primary/5 to-transparent border-b border-gray-100 flex items-center gap-2">
+										<span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 text-primary rounded-md text-xs font-medium">SEO</span>
+										إعدادات تحسين محركات البحث ({languageLabel(translations[index]?.lang)})
+									</summary>
+									<div className="p-5 space-y-5 bg-white">
+										<div>
+											<label className="block text-sm font-medium text-gray-800 mb-1.5">عنوان SEO (meta title)</label>
+											<input
+												{...register(`translations.${index}.meta_title`)}
+												dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+												placeholder="إن تُرك فارغاً، يُستخدم العنوان الأصلي"
+												className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
+											/>
+											<p className="mt-1.5 text-xs text-gray-600">يظهر في وسم &lt;title&gt; وفي عنوان نتيجة البحث. اتركه فارغاً للاستعمال التلقائي.</p>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-800 mb-1.5">وصف SEO (meta description)</label>
+											<textarea
+												{...register(`translations.${index}.meta_description`)}
+												rows={3}
+												dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+												placeholder="إن تُرك فارغاً، يُستخدم الملخص أو مقطع من المحتوى"
+												className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
+											/>
+											<p className="mt-1.5 text-xs text-gray-600">يظهر تحت العنوان في نتائج البحث. الحد الأمثل 150–160 حرفاً.</p>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-800 mb-1.5">صورة المشاركة (og:image)</label>
+											<Controller
+												control={control}
+												name={`translations.${index}.og_image_id`}
+												render={({ field: f }) => (
+													<MediaInput
+														value={f.value ?? undefined}
+														onChange={f.onChange}
+													/>
+												)}
+											/>
+											<p className="mt-1.5 text-xs text-gray-600">تظهر عند مشاركة المقالة في فيسبوك / تويتر. إن تُركت فارغة، تُستخدم صورة الغلاف.</p>
+										</div>
+									</div>
+								</details>
+							</div>
+						))}
+					</div>
+				</div>
+
+				<aside className="space-y-6">
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-4">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">حالة النشر</h3>
+						<label className="flex items-center justify-between cursor-pointer">
+							<span className="flex items-center gap-2 text-sm text-gray-900">
+								{isPublished ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
+								{isPublished ? "منشور" : "مسودة"}
+							</span>
+							<input type="checkbox" {...register("is_published")} className="h-4 w-4 text-primary rounded" />
+						</label>
+						<div>
+							<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />تاريخ النشر</label>
+							<input type="datetime-local" {...register("published_at")} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+							<p className="mt-1 text-[11px] text-gray-500">إن كان في المستقبل وحالة النشر غير مفعّلة → سيُنشر تلقائياً بواسطة المُجَدوِل عند حلول الموعد.</p>
+						</div>
+						<label className="flex items-center justify-between cursor-pointer">
+							<span className="flex items-center gap-2 text-sm text-gray-900">
+								<Star className={`h-4 w-4 ${isFeatured ? "fill-amber-400 text-amber-500" : "text-gray-400"}`} />
+								مقالة مميّزة
+							</span>
+							<input type="checkbox" {...register("is_featured")} className="h-4 w-4 text-primary rounded" />
+						</label>
+						{isFeatured && (
+							<p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 flex items-start gap-2">
+								<Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+								<span>المقالات المميّزة تظهر في القسم الرئيسي من الصفحة الرئيسية على الموقع.</span>
+							</p>
+						)}
+					</div>
+
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-4">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">التصنيف</h3>
+						<select {...register("category_id")} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 							<option value="">اختر تصنيفاً</option>
 							{categories.map((cat) => (
 								<option key={cat.id} value={cat.id}>
-									{cat.post_category_translations.find((t) => t.lang === "ar")?.name ||
-										cat.post_category_translations[0]?.name || "بدون اسم"}
+									{categoryName(cat.post_category_translations, cat.translation)}
 								</option>
 							))}
 						</select>
-						{errors.category_id && <p className="mt-1 text-sm text-red-600">{errors.category_id.message}</p>}
+						{errors.category_id && <p className="text-sm text-red-600">{errors.category_id.message}</p>}
 					</div>
-					<div>
-						<label className="block text-sm font-medium text-gray-700">معرّف صورة الغلاف</label>
-						<input {...register("cover_image_id")} placeholder="UUID لسجل الوسائط" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
-					</div>
-				</div>
-				<div className="flex flex-wrap gap-6">
-					<label className="flex items-center gap-2">
-						<input type="checkbox" {...register("is_published")} className="h-4 w-4 text-primary rounded" />
-						<span className="text-sm text-gray-900">منشور</span>
-					</label>
-					{watch("is_published") && (
-						<div>
-							<label className="block text-sm font-medium text-gray-700">تاريخ النشر</label>
-							<input type="datetime-local" {...register("published_at")} className="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
-						</div>
-					)}
-				</div>
-			</div>
 
-			<div className="bg-white shadow-sm rounded-lg p-6">
-				<div className="flex items-center justify-between mb-4">
-					<h3 className="text-lg font-medium text-gray-900">الترجمات</h3>
-					<button type="button" onClick={addTranslation} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5">
-						<Plus className="h-4 w-4" /> إضافة لغة
-					</button>
-				</div>
-
-				<div className="flex gap-2 mb-6 border-b border-gray-200">
-					{fields.map((field, index) => (
-						<button key={field.id} type="button" onClick={() => setActiveLang(translations[index]?.lang)}
-							className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeLang === translations[index]?.lang ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-							<Globe className="inline h-4 w-4 mr-1" />
-							{translations[index]?.lang.toUpperCase()}
-							{translations[index]?.is_default && <span className="ml-1 text-xs text-gray-400">(الافتراضية)</span>}
-							{fields.length > 1 && (
-								<span onClick={(e) => { e.stopPropagation(); remove(index); if (activeLang === translations[index]?.lang) setActiveLang(translations[0]?.lang) }}
-									className="ml-2 text-gray-400 hover:text-red-500">
-									<Trash2 className="inline h-3 w-3" />
-								</span>
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">صورة الغلاف</h3>
+						<Controller
+							control={control}
+							name="cover_image_id"
+							render={({ field: f }) => (
+								<MediaInput
+									value={f.value ?? undefined}
+									onChange={f.onChange}
+								/>
 							)}
-						</button>
-					))}
-				</div>
-
-				{fields.map((field, index) => (
-					<div key={field.id} className={activeLang === translations[index]?.lang ? "block" : "hidden"}>
-						<div className="space-y-4">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-700">اللغة *</label>
-									<select {...register(`translations.${index}.lang`)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
-										<option value="ar">العربية</option>
-										<option value="en">الإنجليزية</option>
-										<option value="fr">الفرنسية</option>
-										<option value="es">الإسبانية</option>
-										<option value="de">الألمانية</option>
-									</select>
-								</div>
-								<div className="flex items-end">
-									<label className="flex items-center gap-2">
-										<input type="checkbox" {...register(`translations.${index}.is_default`)}
-											onChange={(e) => { if (e.target.checked) fields.forEach((_, i) => { if (i !== index) setValue(`translations.${i}.is_default`, false) }) }}
-											className="h-4 w-4 text-primary rounded" />
-										<span className="text-sm text-gray-900">اللغة الافتراضية</span>
-									</label>
-								</div>
-							</div>
-
-							<div>
-								<label className="block text-sm font-medium text-gray-700">العنوان *</label>
-								<input {...register(`translations.${index}.title`, { onChange: (e) => handleTitleChange(index, e.target.value) })}
-									className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
-								{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
-							</div>
-
-							<div>
-								<label className="block text-sm font-medium text-gray-700">الرابط المختصر (Slug) *</label>
-								<input {...register(`translations.${index}.slug`)} dir="ltr" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-sm" />
-								{errors.translations?.[index]?.slug && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.slug?.message}</p>}
-							</div>
-
-							<div>
-								<label className="block text-sm font-medium text-gray-700">الملخص</label>
-								<textarea {...register(`translations.${index}.summary`)} rows={2}
-									className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
-							</div>
-
-							<div>
-								<label className="block text-sm font-medium text-gray-700">المحتوى *</label>
-								<textarea {...register(`translations.${index}.body`)} rows={14}
-									className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-sm"
-									placeholder="يدعم صيغة Markdown..." />
-								{errors.translations?.[index]?.body && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.body?.message}</p>}
-							</div>
-						</div>
+						/>
 					</div>
-				))}
-			</div>
 
-			<div className="flex gap-3">
-				<button type="submit" disabled={isSaving}
-					className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-medium rounded-md hover:bg-primary/90 disabled:opacity-50">
-					{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-					{isSaving ? "جارٍ الحفظ..." : post ? "تحديث المقالة" : "إنشاء مقالة"}
-				</button>
-				<button type="button" onClick={() => router.push("/dashboard/posts")} disabled={isSaving}
-					className="px-6 py-2.5 border border-gray-300 font-medium rounded-md text-gray-700 hover:bg-gray-50">
-					إلغاء
-				</button>
-			</div>
-		</form>
+					<div className="flex flex-col gap-2">
+						<button type="submit" disabled={isSaving} className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white font-medium rounded-md hover:bg-primary/90 disabled:opacity-50">
+							{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+							{post ? "تحديث المقالة" : "إنشاء مقالة"}
+						</button>
+						<button type="button" onClick={() => router.push("/dashboard/posts")} disabled={isSaving} className="w-full px-6 py-2.5 border border-gray-300 font-medium rounded-md text-gray-700 hover:bg-gray-50">
+							إلغاء
+						</button>
+					</div>
+				</aside>
+			</form>
+
+			<MediaPicker
+				open={!!imagePickerOpen}
+				onClose={() => { imagePickerOpen?.(null); setImagePickerOpen(null) }}
+				onSelect={(m) => { imagePickerOpen?.(m.url); setImagePickerOpen(null) }}
+				title="اختر صورة لإدراجها في المحتوى"
+			/>
+
+		</>
 	)
 }

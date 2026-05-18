@@ -1,152 +1,374 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { mediaService } from "@/services/media.service"
-import { galleryService } from "@/services/gallery.service"
-import type { GalleryImage } from "@/types"
+import { useState, useCallback } from "react"
+import type { GalleryImage, GalleryCategory } from "@/types"
 import { toast } from "sonner"
-import { Upload, Trash2, Copy, ImageIcon, Loader2, Search, X } from "lucide-react"
+import { getErrorMessage } from "@/lib/api"
+import { categoryName } from "@/lib/i18n"
+import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
+import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag } from "lucide-react"
+import { format } from "date-fns"
+import EmptyState from "@/components/ui/EmptyState"
+import PageHeader from "@/components/layout/PageHeader"
+import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { CardGridSkeleton } from "@/components/ui/Skeleton"
+import { useUploadMedia } from "@/lib/queries/media"
+import {
+	useGalleryList,
+	useCreateGalleryItem,
+	useUpdateGalleryItem,
+	useDeleteGalleryItem,
+} from "@/lib/queries/gallery"
+import { useGalleryCategoriesList } from "@/lib/queries/gallery-categories"
 
 export default function GalleryPage() {
-	const [images, setImages] = useState<GalleryImage[]>([])
-	const [isLoading, setIsLoading] = useState(true)
-	const [isUploading, setIsUploading] = useState(false)
-	const [searchQuery, setSearchQuery] = useState("")
-	const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null)
+	const [search, setSearch] = useState("")
+	const [selected, setSelected] = useState<GalleryImage | null>(null)
+	const { confirm, dialog } = useConfirm()
 
-	useEffect(() => { loadImages() }, [])
+	const galleryQuery = useGalleryList({ limit: 100 })
+	const categoriesQuery = useGalleryCategoriesList({ limit: 100 })
+	const images = galleryQuery.data?.items ?? []
+	const categories = categoriesQuery.data?.items ?? []
+	const loading = galleryQuery.isLoading
 
-	const loadImages = async () => {
-		try {
-			const { data } = await galleryService.list({ limit: 100 })
-			setImages(data.items ?? [])
-		} catch { toast.error("فشل تحميل المعرض") }
-		finally { setIsLoading(false) }
-	}
+	const uploadMedia = useUploadMedia()
+	const createGallery = useCreateGalleryItem()
+	const deleteGallery = useDeleteGalleryItem()
+	const uploading = uploadMedia.isPending || createGallery.isPending
 
 	const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = e.target.files
 		if (!files?.length) return
-		setIsUploading(true)
 		try {
 			for (const file of Array.from(files)) {
-				const media = await mediaService.uploadFile(file)
-				await galleryService.create({ media_id: media.id })
+				const media = await uploadMedia.mutateAsync(file)
+				await createGallery.mutateAsync({
+					media_id: media.id,
+					translations: [{ lang: "ar", title: file.name.replace(/\.[^.]+$/, "") }],
+				})
 			}
 			toast.success(`تم رفع ${files.length} صورة`)
-			loadImages()
-		} catch { toast.error("فشل الرفع") }
-		finally { setIsUploading(false); e.target.value = "" }
-	}, [])
+		} catch (err) {
+			toast.error(getErrorMessage(err, "فشل الرفع"))
+		} finally {
+			e.target.value = ""
+		}
+	}, [uploadMedia, createGallery])
 
-	const handleDelete = async (id: string) => {
-		if (!confirm("هل تريد حذف هذه الصورة؟")) return
-		try {
-			await galleryService.remove(id)
-			toast.success("تم حذف الصورة")
-			setSelectedImage(null)
-			loadImages()
-		} catch { toast.error("فشل حذف الصورة") }
+	const handleDelete = async (mediaId: string) => {
+		const ok = await confirm({
+			title: "حذف هذه الصورة من المعرض؟",
+			description: "تُحذف الصورة من المعرض، لكن الملف يبقى في مكتبة الوسائط.",
+			confirmText: "حذف",
+			tone: "danger",
+		})
+		if (!ok) return
+		deleteGallery.mutate(mediaId, {
+			onSuccess: () => { toast.success("تم الحذف"); setSelected(null) },
+			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
+		})
 	}
 
-	const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("تم النسخ") }
-
 	const getTitle = (img: GalleryImage) =>
-		(img.gallery_image_translations ?? []).find((t) => t.is_default)?.title ||
+		img.translation?.title ||
+		(img.gallery_image_translations ?? []).find((t) => t.lang === "ar")?.title ||
 		(img.gallery_image_translations ?? [])[0]?.title ||
 		""
 
 	const filtered = images.filter((img) => {
 		const title = getTitle(img).toLowerCase()
-		const q = searchQuery.toLowerCase()
-		return !q || title.includes(q) || (img.id && img.id.includes(q))
+		const q = search.toLowerCase()
+		return !q || title.includes(q) || img.tags.some((t) => t.toLowerCase().includes(q))
 	})
 
-	if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-
 	return (
-		<div>
-			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-				<h1 className="text-3xl font-bold text-gray-900">معرض الصور</h1>
-				<label className={`inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 cursor-pointer ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
-					{isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-					{isUploading ? "جارٍ الرفع..." : "رفع صور"}
-					<input type="file" multiple accept="image/*" onChange={handleUpload} disabled={isUploading} className="hidden" />
-				</label>
-			</div>
+		<div className="space-y-6">
+			<PageHeader
+				title="معرض الصور"
+				description="اعرض صور الفعاليات والأحداث. اضغط أي صورة لتعديل بياناتها."
+				icon={ImageIcon}
+				actions={
+					<div className="flex gap-2">
+						<a href="/dashboard/gallery/trash" className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
+							<Trash2 className="h-4 w-4" />سلة المهملات
+						</a>
+						<label className={`inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 cursor-pointer transition-colors ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
+							{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+							{uploading ? "جارٍ الرفع..." : "رفع صور"}
+							<input type="file" multiple accept="image/*" onChange={handleUpload} disabled={uploading} className="hidden" />
+						</label>
+					</div>
+				}
+			/>
 
-			<div className="relative mb-6">
+			<div className="relative">
 				<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-				<input type="text" placeholder="ابحث عن صورة..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-					className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+				<input
+					type="text" placeholder="ابحث بالعنوان أو الوسم..."
+					value={search} onChange={(e) => setSearch(e.target.value)}
+					className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary bg-white"
+				/>
 			</div>
 
-			{filtered.length === 0 ? (
-				<div className="text-center py-16 bg-white rounded-lg">
-					<ImageIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-					<p className="text-gray-500 text-lg">{searchQuery ? "لا توجد صور تطابق البحث" : "لا توجد صور مرفوعة بعد"}</p>
-				</div>
+			{loading ? (
+				<CardGridSkeleton count={10} aspect="aspect-square" cols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5" />
+			) : filtered.length === 0 ? (
+				<EmptyState
+					variant="card"
+					icon={ImageIcon}
+					title={search ? "لا توجد صور تطابق البحث" : "لا توجد صور في المعرض بعد"}
+					description={search ? "جرّب كلمات بحث مختلفة." : "ارفع صوراً لإنشاء معرض يظهر للزائرين على الموقع."}
+					action={!search && (
+						<label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90 ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
+							{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+							ارفع أول صورة
+							<input type="file" multiple accept="image/*" onChange={handleUpload} disabled={uploading} className="hidden" />
+						</label>
+					)}
+				/>
 			) : (
 				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-					{filtered.map((image, idx) => (
-						<div key={image.id ?? idx} onClick={() => setSelectedImage(image)}
-							className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary">
-							{image.image_url ? (
-								<img src={image.image_url} alt={getTitle(image)} className="w-full h-full object-cover" />
+					{filtered.map((image) => (
+						<button key={image.media_id}
+							onClick={() => setSelected(image)}
+							className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden text-right hover:ring-2 hover:ring-primary cursor-pointer">
+							{image.media?.url ? (
+								<img src={image.media.url} alt={getTitle(image)} className="w-full h-full object-cover" />
 							) : (
 								<div className="w-full h-full flex items-center justify-center"><ImageIcon className="h-10 w-10 text-gray-300" /></div>
 							)}
-							<div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-								<button onClick={(e) => { e.stopPropagation(); if (image.id) copy(image.id) }} className="p-2 bg-white rounded-full hover:bg-gray-100" title="نسخ المعرّف"><Copy className="h-4 w-4 text-gray-700" /></button>
-								<button onClick={(e) => { e.stopPropagation(); handleDelete(image.id) }} className="p-2 bg-white rounded-full hover:bg-red-50" title="حذف"><Trash2 className="h-4 w-4 text-red-600" /></button>
+							<div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+								<p className="text-white text-xs truncate font-medium">{getTitle(image) || "بدون عنوان"}</p>
 							</div>
-						</div>
+						</button>
 					))}
 				</div>
 			)}
 
-			{selectedImage && (
-				<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedImage(null)}>
-					<div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-						<div className="p-6">
-							<div className="flex justify-between items-start mb-4">
-								<h2 className="text-xl font-semibold text-gray-900">تفاصيل الصورة</h2>
-								<button onClick={() => setSelectedImage(null)} className="p-1 hover:bg-gray-100 rounded-full"><X className="h-5 w-5 text-gray-500" /></button>
-							</div>
-							{selectedImage.image_url ? (
-								<img src={selectedImage.image_url} alt={getTitle(selectedImage)} className="w-full rounded-lg mb-4" />
+			{selected && (
+				<GalleryImageDialog
+					image={selected}
+					categories={categories}
+					onClose={() => setSelected(null)}
+					onSaved={() => setSelected(null)}
+					onDelete={() => handleDelete(selected.media_id)}
+				/>
+			)}
+			{dialog}
+		</div>
+	)
+}
+
+function GalleryImageDialog({
+	image,
+	categories,
+	onClose,
+	onSaved,
+	onDelete,
+}: {
+	image: GalleryImage
+	categories: GalleryCategory[]
+	onClose: () => void
+	onSaved: () => void
+	onDelete: () => void
+}) {
+	const { languages } = useActiveLanguages()
+	const updateGallery = useUpdateGalleryItem()
+	const saving = updateGallery.isPending
+	const [categoryId, setCategoryId] = useState(image.category_id ?? "")
+	const [author, setAuthor] = useState(image.author ?? "")
+	const [takenAt, setTakenAt] = useState(image.taken_at ? image.taken_at.slice(0, 10) : "")
+	const [tags, setTags] = useState<string[]>(image.tags ?? [])
+	const [locations, setLocations] = useState<string[]>(image.locations ?? [])
+	const [translations, setTranslations] = useState(
+		image.gallery_image_translations.length
+			? image.gallery_image_translations.map((t) => ({
+				lang: t.lang, title: t.title ?? "", description: t.description ?? "",
+			}))
+			: [{ lang: "ar", title: "", description: "" }]
+	)
+	const [tagInput, setTagInput] = useState("")
+	const [locInput, setLocInput] = useState("")
+	const [activeLang, setActiveLang] = useState(translations[0]?.lang ?? "ar")
+
+	const addTag = () => {
+		if (!tagInput.trim() || tags.includes(tagInput.trim())) return
+		setTags([...tags, tagInput.trim()]); setTagInput("")
+	}
+	const addLoc = () => {
+		if (!locInput.trim() || locations.includes(locInput.trim())) return
+		setLocations([...locations, locInput.trim()]); setLocInput("")
+	}
+
+	const updateT = (i: number, patch: Partial<typeof translations[0]>) => {
+		const next = [...translations]
+		next[i] = { ...next[i], ...patch }
+		setTranslations(next)
+	}
+
+	const addTranslation = () => {
+		const used = translations.map((t) => t.lang)
+		const next = languages.find((l) => !used.includes(l.code))
+		if (!next) { toast.error("لا توجد لغات إضافية"); return }
+		setTranslations([...translations, { lang: next.code, title: "", description: "" }])
+		setActiveLang(next.code)
+	}
+
+	const removeTranslation = (i: number) => {
+		const next = translations.filter((_, idx) => idx !== i)
+		setTranslations(next.length ? next : [{ lang: "ar", title: "", description: "" }])
+		if (translations[i].lang === activeLang) setActiveLang(next[0]?.lang ?? "ar")
+	}
+
+	const handleSave = () => {
+		updateGallery.mutate(
+			{
+				id: image.media_id,
+				body: {
+					category_id: categoryId || undefined,
+					author: author || undefined,
+					taken_at: takenAt ? new Date(takenAt).toISOString() : undefined,
+					tags,
+					locations,
+					translations: translations.filter((t) => t.title.trim()),
+				},
+			},
+			{
+				onSuccess: () => { toast.success("تم الحفظ"); onSaved() },
+				onError: (e) => toast.error(getErrorMessage(e, "فشل الحفظ")),
+			},
+		)
+	}
+
+	const catName = (c: GalleryCategory) =>
+		categoryName(c.gallery_category_translations, c.translation)
+
+	return (
+		<div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+			<div className="bg-white rounded-xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+				<div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+					<h2 className="text-lg font-semibold text-gray-900">تفاصيل الصورة</h2>
+					<button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="h-5 w-5 text-gray-500" /></button>
+				</div>
+
+				<div className="flex-1 overflow-y-auto">
+					<div className="grid grid-cols-1 md:grid-cols-5 gap-0">
+						<div className="md:col-span-2 bg-gray-900 flex items-center justify-center min-h-75 md:min-h-125 relative">
+							{image.media?.url ? (
+								<img src={image.media.url} alt="" className="max-w-full max-h-[60vh] object-contain" />
 							) : (
-								<div className="w-full h-48 bg-gray-100 rounded-lg mb-4 flex items-center justify-center"><ImageIcon className="h-16 w-16 text-gray-300" /></div>
+								<ImageIcon className="h-20 w-20 text-gray-600" />
 							)}
-							<div className="space-y-3">
-								{getTitle(selectedImage) && (
-									<div><label className="text-sm font-medium text-gray-500">العنوان</label><p className="text-sm text-gray-900">{getTitle(selectedImage)}</p></div>
-								)}
+							{image.media?.width && image.media?.height && (
+								<span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+									{image.media.width}×{image.media.height}
+								</span>
+							)}
+						</div>
+
+						<div className="md:col-span-3 p-6 space-y-4">
+							<div className="grid grid-cols-2 gap-3">
 								<div>
-									<label className="text-sm font-medium text-gray-500">معرّف الصورة</label>
-									<div className="flex items-center gap-2 mt-1">
-										<code className="flex-1 px-3 py-2 bg-gray-100 rounded text-sm font-mono truncate">{selectedImage.id || "—"}</code>
-										{selectedImage.id && <button onClick={() => copy(selectedImage.id)} className="p-2 text-primary hover:bg-primary/5 rounded"><Copy className="h-4 w-4" /></button>}
-									</div>
+									<label className="block text-xs font-medium text-gray-500 mb-1">التصنيف</label>
+									<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+										<option value="">— بدون —</option>
+										{categories.map((c) => <option key={c.id} value={c.id}>{catName(c)}</option>)}
+									</select>
 								</div>
-								{selectedImage.image_url && (
-									<div>
-										<label className="text-sm font-medium text-gray-500">رابط الصورة</label>
-										<div className="flex items-center gap-2 mt-1">
-											<code className="flex-1 px-3 py-2 bg-gray-100 rounded text-sm font-mono truncate">{selectedImage.image_url}</code>
-											<button onClick={() => copy(selectedImage.image_url!)} className="p-2 text-primary hover:bg-primary/5 rounded"><Copy className="h-4 w-4" /></button>
-										</div>
-									</div>
-								)}
-								<div className="pt-4 flex gap-2">
-									{selectedImage.image_url && <a href={selectedImage.image_url} target="_blank" rel="noreferrer" className="flex-1 px-4 py-2 bg-primary text-white text-center rounded-md hover:bg-primary/90">عرض الحجم الكامل</a>}
-									<button onClick={() => handleDelete(selectedImage.id)} className="px-4 py-2 border border-red-300 text-red-600 rounded-md hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+								<div>
+									<label className="block text-xs font-medium text-gray-500 mb-1">المصوِّر</label>
+									<input value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 								</div>
+								<div>
+									<label className="block text-xs font-medium text-gray-500 mb-1">تاريخ الالتقاط</label>
+									<input type="date" value={takenAt} onChange={(e) => setTakenAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+								</div>
+								<div>
+									<label className="block text-xs font-medium text-gray-500 mb-1">رُفعت في</label>
+									<p className="px-3 py-2 text-sm text-gray-600">{format(new Date(image.created_at), "dd/MM/yyyy")}</p>
+								</div>
+							</div>
+
+							<div>
+								<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Tag className="h-3 w-3" />الوسوم</label>
+								<div className="flex gap-2">
+									<input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag() } }} placeholder="أضف وسماً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<button type="button" onClick={addTag} className="px-2.5 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
+								</div>
+								<div className="flex flex-wrap gap-1 mt-2">
+									{tags.map((t, i) => (
+										<span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+											{t}
+											<button onClick={() => setTags(tags.filter((_, j) => j !== i))} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+										</span>
+									))}
+								</div>
+							</div>
+
+							<div>
+								<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" />المواقع</label>
+								<div className="flex gap-2">
+									<input value={locInput} onChange={(e) => setLocInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLoc() } }} placeholder="أضف موقعاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<button type="button" onClick={addLoc} className="px-2.5 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
+								</div>
+								<div className="flex flex-wrap gap-1 mt-2">
+									{locations.map((l, i) => (
+										<span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 text-xs rounded-full">
+											{l}
+											<button onClick={() => setLocations(locations.filter((_, j) => j !== i))} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+										</span>
+									))}
+								</div>
+							</div>
+
+							<div>
+								<div className="flex items-center justify-between mb-2">
+									<label className="block text-xs font-medium text-gray-500">العنوان والوصف</label>
+									<button type="button" onClick={addTranslation} className="text-xs text-primary hover:underline flex items-center gap-1"><Plus className="h-3 w-3" />لغة</button>
+								</div>
+								<div className="flex gap-1 mb-2 border-b border-gray-200">
+									{translations.map((t, i) => (
+										<button key={i} type="button" onClick={() => setActiveLang(t.lang)}
+											className={`cursor-pointer px-3 py-1.5 text-xs font-medium border-b-2 ${activeLang === t.lang ? "border-primary text-primary" : "border-transparent text-gray-500"}`}>
+											{languageLabel(t.lang)}
+											{translations.length > 1 && (
+												<span onClick={(e) => { e.stopPropagation(); removeTranslation(i) }} className="mr-1 text-gray-400 hover:text-red-500 cursor-pointer"><X className="inline h-3 w-3" /></span>
+											)}
+										</button>
+									))}
+								</div>
+								{translations.map((t, i) => (
+									<div key={i} className={activeLang === t.lang ? "block space-y-2" : "hidden"}>
+										<input value={t.title} onChange={(e) => updateT(i, { title: e.target.value })}
+											placeholder="العنوان"
+											dir={t.lang === "ar" ? "rtl" : "ltr"}
+											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+										<textarea value={t.description} onChange={(e) => updateT(i, { description: e.target.value })}
+											placeholder="وصف الصورة..."
+											dir={t.lang === "ar" ? "rtl" : "ltr"}
+											rows={3}
+											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									</div>
+								))}
 							</div>
 						</div>
 					</div>
 				</div>
-			)}
+
+				<div className="flex justify-between items-center px-6 py-3 border-t border-gray-200 bg-gray-50">
+					<button onClick={onDelete} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50">
+						<Trash2 className="h-4 w-4" />حذف
+					</button>
+					<div className="flex gap-2">
+						<button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">إلغاء</button>
+						<button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50">
+							{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ
+						</button>
+					</div>
+				</div>
+			</div>
 		</div>
 	)
 }

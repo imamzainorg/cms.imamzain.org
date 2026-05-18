@@ -3,7 +3,7 @@
   "paths": {
     "/api/v1/health": {
       "get": {
-        "description": "Returns the overall API status, database connectivity, and storage connectivity. `status` is `OK` when all checks pass, `DEGRADED` when one or more are unhealthy.",
+        "description": "Returns the overall API status, database connectivity, and storage connectivity. `status` is `OK` when all checks pass, `DEGRADED` when one or more are unhealthy. Storage status is cached for 60s to avoid amplifying load on the object store.",
         "operationId": "HealthController_check",
         "parameters": [],
         "responses": {
@@ -89,7 +89,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "The supplied refresh token is revoked and replaced (rotation). Expires after 7 days.",
+        "description": "The supplied refresh token is atomically revoked and replaced (rotation). Presenting an already-revoked token revokes the entire token chain for the user. Refresh tokens expire after 7 days. Rate-limited to 30 attempts per 15 minutes per IP.",
         "operationId": "AuthController_refresh",
         "parameters": [],
         "requestBody": {
@@ -114,11 +114,21 @@
             }
           },
           "401": {
-            "description": "Invalid or expired refresh token",
+            "description": "Invalid, expired, or reused refresh token",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TooManyRequestsErrorDto"
                 }
               }
             }
@@ -135,6 +145,16 @@
         "description": "Pass `refresh_token` in the body to revoke only that token; omit to revoke all active sessions.",
         "operationId": "AuthController_logout",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Logged out successfully",
@@ -271,6 +291,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -282,6 +303,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -806,6 +828,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -817,6 +840,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -973,6 +997,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -984,11 +1009,12 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 100, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
-              "example": 20,
+              "example": 100,
               "type": "number"
             }
           }
@@ -1784,7 +1810,7 @@
     },
     "/api/v1/media/upload-url": {
       "post": {
-        "description": "Step 1 of the two-step upload flow. Use the returned `uploadUrl` to PUT the file directly to R2, then call `POST /media/confirm` with the returned `key`. Requires permission: `media:create`",
+        "description": "Step 1 of the two-step upload flow. Use the returned `uploadUrl` to PUT the file directly to R2, then call `POST /media/confirm` with the returned `key`. Allowed MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`. The signed URL is bound to the requesting user — only that user can confirm the upload. Requires permission: `media:create`.",
         "operationId": "MediaController_requestUploadUrl",
         "parameters": [],
         "requestBody": {
@@ -1809,7 +1835,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or MIME type not in the allowlist",
             "content": {
               "application/json": {
                 "schema": {
@@ -1852,7 +1878,7 @@
     },
     "/api/v1/media/confirm": {
       "post": {
-        "description": "Step 2 of the two-step upload flow. Call after successfully PUTting the file to R2 using the signed URL. Requires permission: `media:create`",
+        "description": "Step 2 of the two-step upload flow. Call after successfully PUTting the file to R2 using the signed URL. The server verifies the key is one this user requested via `/media/upload-url`, and authoritatively reads the actual stored Content-Type and Content-Length from R2 (client-supplied values are not trusted). Requires permission: `media:create`.",
         "operationId": "MediaController_confirmUpload",
         "parameters": [],
         "requestBody": {
@@ -1877,7 +1903,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, the key is not under the managed prefix, or the file was not uploaded to R2",
             "content": {
               "application/json": {
                 "schema": {
@@ -1897,11 +1923,21 @@
             }
           },
           "403": {
-            "description": "Insufficient permissions",
+            "description": "The key was issued to a different user",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending upload exists for that key — request a new upload URL first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
                 }
               }
             }
@@ -1927,6 +1963,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -1938,6 +1975,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -2238,6 +2276,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -2249,6 +2288,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -2261,7 +2301,7 @@
             "name": "category_id",
             "required": false,
             "in": "query",
-            "description": "Filter by category ID",
+            "description": "Filter by post category UUID",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -2271,7 +2311,7 @@
             "name": "search",
             "required": false,
             "in": "query",
-            "description": "Full-text search across title and body",
+            "description": "Full-text search across post titles and body content",
             "schema": {
               "example": "الإمام",
               "type": "string"
@@ -2331,7 +2371,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or translations did not contain exactly one is_default entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -2356,6 +2396,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No post category with that category_id exists, or the cover_image_id does not match any media record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A translation slug is already used by another post in the same language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -2442,6 +2502,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -2453,6 +2514,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -2465,7 +2527,7 @@
             "name": "category_id",
             "required": false,
             "in": "query",
-            "description": "Filter by category ID",
+            "description": "Filter by post category UUID",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -2475,7 +2537,7 @@
             "name": "search",
             "required": false,
             "in": "query",
-            "description": "Full-text search across title and body",
+            "description": "Full-text search across post titles and body content",
             "schema": {
               "example": "الإمام",
               "type": "string"
@@ -2525,6 +2587,83 @@
         ]
       }
     },
+    "/api/v1/posts/admin/{id}": {
+      "get": {
+        "description": "Requires permission: `posts:read`. Returns drafts and unpublished posts.",
+        "operationId": "PostsController_findAdminOne",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "ISO 639-1 code for translated fields (e.g. ar, en). Falls back to default translation.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post detail with all translations and attached media records (regardless of publish state)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDetailResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No post with that ID exists, or it has been deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "Get a single post by ID including unpublished (admin)",
+        "tags": [
+          "Posts"
+        ]
+      }
+    },
     "/api/v1/posts/{id}": {
       "get": {
         "operationId": "PostsController_findOne",
@@ -2550,7 +2689,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Post detail with all translations and attached media records",
+            "description": "Post detail with all translations and attached media records (published only)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2560,7 +2699,7 @@
             }
           },
           "404": {
-            "description": "No post with that ID exists, or it has been deleted",
+            "description": "No published post with that ID exists, or it has been deleted/unpublished",
             "content": {
               "application/json": {
                 "schema": {
@@ -2570,7 +2709,7 @@
             }
           }
         },
-        "summary": "Get a single post by ID (public)",
+        "summary": "Get a single published post by ID (public)",
         "tags": [
           "Posts"
         ]
@@ -2620,7 +2759,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or the resulting translations did not contain exactly one is_default entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -2650,11 +2789,21 @@
             }
           },
           "404": {
-            "description": "No post with that ID exists, or it has been deleted",
+            "description": "No post with that ID exists, or the new category_id / cover_image_id does not exist or has been soft-deleted",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A translation slug is already used by another post in the same language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -2748,7 +2897,7 @@
     },
     "/api/v1/posts/{id}/view": {
       "post": {
-        "description": "Increments the view counter. Call this explicitly when a reader views the post content.",
+        "description": "Increments the view counter. Rate-limited to 30 calls per minute per IP.",
         "operationId": "PostsController_trackView",
         "parameters": [
           {
@@ -2903,6 +3052,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -2914,11 +3064,12 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 100, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
-              "example": 20,
+              "example": 100,
               "type": "number"
             }
           }
@@ -3267,6 +3418,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -3278,6 +3430,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -3290,7 +3443,7 @@
             "name": "category_id",
             "required": false,
             "in": "query",
-            "description": "Filter by category ID",
+            "description": "Filter by book category UUID",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -3385,6 +3538,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No book category with that category_id exists, or the cover_image_id does not match any media record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A book with that ISBN already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -3497,7 +3670,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or the resulting translations did not contain exactly one is_default entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -3527,11 +3700,21 @@
             }
           },
           "404": {
-            "description": "No book with that ID exists, or it has been deleted",
+            "description": "No book with that ID exists, or the new category_id / cover_image_id does not exist or has been soft-deleted",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A book with that ISBN already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -3625,7 +3808,7 @@
     },
     "/api/v1/books/{id}/view": {
       "post": {
-        "description": "Increments the view counter. Call this explicitly when a reader views the book.",
+        "description": "Increments the view counter. Rate-limited to 30 calls per minute per IP.",
         "operationId": "BooksController_trackView",
         "parameters": [
           {
@@ -3693,6 +3876,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -3704,11 +3888,12 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 100, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
-              "example": 20,
+              "example": 100,
               "type": "number"
             }
           }
@@ -4057,6 +4242,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -4068,6 +4254,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -4080,7 +4267,7 @@
             "name": "category_id",
             "required": false,
             "in": "query",
-            "description": "Filter by gallery category ID",
+            "description": "Filter by gallery category UUID",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -4090,7 +4277,7 @@
             "name": "tags",
             "required": false,
             "in": "query",
-            "description": "Filter images that have ALL specified tags",
+            "description": "Filter by tags — images must have ALL specified tags",
             "schema": {
               "example": [
                 "shrine"
@@ -4105,7 +4292,7 @@
             "name": "locations",
             "required": false,
             "in": "query",
-            "description": "Filter images that have ALL specified locations",
+            "description": "Filter by locations — images must have ALL specified locations",
             "schema": {
               "example": [
                 "Karbala"
@@ -4464,6 +4651,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -4475,11 +4663,12 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 100, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
-              "example": 20,
+              "example": 100,
               "type": "number"
             }
           }
@@ -4725,7 +4914,7 @@
         ]
       },
       "delete": {
-        "description": "Requires permission: `gallery-categories:delete`.",
+        "description": "Fails with 409 if the category still contains gallery images — reassign or delete those first. Requires permission: `gallery-categories:delete`.",
         "operationId": "GalleryCategoriesController_remove",
         "parameters": [
           {
@@ -4749,7 +4938,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Gallery category soft-deleted; existing gallery images that referenced this category retain their category_id",
+            "description": "Gallery category soft-deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -4787,6 +4976,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Cannot delete: this gallery category still has live gallery images attached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -4818,6 +5017,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -4829,6 +5029,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -4841,7 +5042,7 @@
             "name": "category_id",
             "required": false,
             "in": "query",
-            "description": "Filter by category ID",
+            "description": "Filter by academic paper category UUID",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -4851,9 +5052,9 @@
             "name": "search",
             "required": false,
             "in": "query",
-            "description": "Search across titles",
+            "description": "Search across paper titles and abstracts",
             "schema": {
-              "example": "الصحيفة",
+              "example": "فقه",
               "type": "string"
             }
           }
@@ -4911,7 +5112,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or translations did not contain exactly one is_default entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -4936,6 +5137,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No academic paper category with that category_id exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
                 }
               }
             }
@@ -5048,7 +5259,7 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or the resulting translations did not contain exactly one is_default entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -5078,7 +5289,7 @@
             }
           },
           "404": {
-            "description": "No academic paper with that ID exists, or it has been deleted",
+            "description": "No academic paper with that ID exists, or the new category_id does not exist or has been soft-deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -5192,6 +5403,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -5203,11 +5415,12 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 100, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
-              "example": 20,
+              "example": 100,
               "type": "number"
             }
           }
@@ -5453,7 +5666,7 @@
         ]
       },
       "delete": {
-        "description": "Requires permission: `academic-paper-categories:delete`.",
+        "description": "Fails with 409 if the category still contains academic papers — reassign or delete those first. Requires permission: `academic-paper-categories:delete`.",
         "operationId": "AcademicPaperCategoriesController_remove",
         "parameters": [
           {
@@ -5477,7 +5690,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Academic paper category soft-deleted; existing papers that referenced this category retain their category_id",
+            "description": "Academic paper category soft-deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -5512,6 +5725,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cannot delete: this category still has live academic papers attached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -5593,7 +5816,7 @@
     },
     "/api/v1/newsletter/unsubscribe": {
       "post": {
-        "description": "Rate-limited to 5 requests per 15 minutes.",
+        "description": "Requires the unsubscribe token returned from POST /subscribe (or embedded in unsubscribe email links). Idempotent: re-calls return the existing record. Rate-limited to 5 requests per 15 minutes per IP.",
         "operationId": "NewsletterController_unsubscribe",
         "parameters": [],
         "requestBody": {
@@ -5608,7 +5831,7 @@
         },
         "responses": {
           "200": {
-            "description": "Email successfully unsubscribed; the subscriber record is soft-deleted and the email will no longer receive newsletters",
+            "description": "Email is no longer active; idempotent on repeated calls",
             "content": {
               "application/json": {
                 "schema": {
@@ -5618,7 +5841,7 @@
             }
           },
           "400": {
-            "description": "Validation failed — e.g. invalid email format",
+            "description": "Validation failed — invalid email format or missing token",
             "content": {
               "application/json": {
                 "schema": {
@@ -5627,12 +5850,12 @@
               }
             }
           },
-          "404": {
-            "description": "No active subscriber with that email address exists",
+          "401": {
+            "description": "Token does not match the subscriber, or no such subscriber exists",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                  "$ref": "#/components/schemas/UnauthorizedErrorDto"
                 }
               }
             }
@@ -5663,6 +5886,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -5674,6 +5898,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -5746,9 +5971,145 @@
         ]
       }
     },
+    "/api/v1/newsletter/subscribers/{id}/unsubscribe": {
+      "post": {
+        "description": "Marks the subscriber inactive without requiring the user-facing HMAC token. The subscriber row is preserved (use DELETE /subscribers/:id to also remove it). Idempotent. Requires permission: `newsletter:update`.",
+        "operationId": "NewsletterController_unsubscribeAsAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscriber set to inactive; their email is preserved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriberResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No subscriber with that ID exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "Unsubscribe a subscriber (admin)",
+        "tags": [
+          "Newsletter"
+        ]
+      }
+    },
+    "/api/v1/newsletter/subscribers/{id}/resubscribe": {
+      "post": {
+        "description": "Flips an unsubscribed subscriber back to active. Idempotent. Requires permission: `newsletter:update`.",
+        "operationId": "NewsletterController_resubscribeAsAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscriber set back to active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriberResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No subscriber with that ID exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "Reactivate an inactive subscriber (admin)",
+        "tags": [
+          "Newsletter"
+        ]
+      }
+    },
     "/api/v1/newsletter/subscribers/{id}": {
       "delete": {
-        "description": "Requires permission: `newsletter:delete`.",
+        "description": "Removes the subscriber record from listings (sets `deleted_at`). Distinct from unsubscribe — use `POST /subscribers/:id/unsubscribe` if you only want to mark them inactive. Requires permission: `newsletter:delete`.",
         "operationId": "NewsletterController_remove",
         "parameters": [
           {
@@ -5808,7 +6169,7 @@
             "jwt": []
           }
         ],
-        "summary": "Soft-delete a subscriber record",
+        "summary": "Soft-delete a subscriber record (admin)",
         "tags": [
           "Newsletter"
         ]
@@ -5876,6 +6237,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -5887,6 +6249,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -6170,6 +6533,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (default: 1)",
             "schema": {
               "minimum": 1,
               "default": 1,
@@ -6181,6 +6545,7 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
             "schema": {
               "minimum": 1,
               "maximum": 100,
@@ -6435,11 +6800,8 @@
             "in": "query",
             "description": "Filter by submission status",
             "schema": {
-              "enum": [
-                "true",
-                "false"
-              ],
-              "type": "string"
+              "example": true,
+              "type": "boolean"
             }
           }
         ],
@@ -6511,7 +6873,7 @@
     },
     "/api/v1/forms/qutuf-sajjadiya-contest/start": {
       "post": {
-        "description": "Creates a new attempt row and returns an `attempt_id`. Rate-limited to 10 starts per hour per IP.",
+        "description": "Creates a new attempt row and returns an `attempt_id`. The `contact` field must match `contactType` (E.164-ish phone or RFC-style email). The same value can only be used once across the `phone` and `email` columns combined. Rate-limited to 10 starts per hour per IP.",
         "operationId": "ContestController_start",
         "parameters": [],
         "requestBody": {
@@ -6536,11 +6898,21 @@
             }
           },
           "400": {
-            "description": "Validation failed",
+            "description": "Validation failed, or contact value did not match the declared contactType",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This identity has already submitted a contest attempt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorDto"
                 }
               }
             }
@@ -6838,7 +7210,8 @@
           "password": {
             "type": "string",
             "example": "secret123",
-            "minLength": 6
+            "minLength": 6,
+            "maxLength": 128
           }
         },
         "required": [
@@ -7106,6 +7479,16 @@
           "data"
         ]
       },
+      "LogoutDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "example": "eyJhbGci...",
+            "description": "Specific refresh token to revoke. Omit to revoke all active sessions for the current user."
+          }
+        }
+      },
       "LogoutResponseDto": {
         "type": "object",
         "properties": {
@@ -7207,12 +7590,14 @@
         "properties": {
           "currentPassword": {
             "type": "string",
-            "example": "current-secret"
+            "example": "current-secret",
+            "maxLength": 128
           },
           "newPassword": {
             "type": "string",
             "example": "new-secret123",
-            "minLength": 6
+            "minLength": 6,
+            "maxLength": 128
           }
         },
         "required": [
@@ -8170,8 +8555,13 @@
           "mime_type": {
             "type": "string",
             "example": "image/jpeg",
-            "description": "Must start with image/",
-            "pattern": "^image/"
+            "description": "MIME type. Allowed: image/jpeg, image/png, image/gif, image/webp. Other types are rejected with 400.",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/gif",
+              "image/webp"
+            ]
           }
         },
         "required": [
@@ -8968,6 +9358,16 @@
             "items": {
               "$ref": "#/components/schemas/PostCategoryTranslationDto"
             }
+          },
+          "translation": {
+            "nullable": true,
+            "description": "Resolved translation for the requested Accept-Language header, with fallback to the first available translation. Null when the category has no translations.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostCategoryTranslationDto"
+              }
+            ]
           }
         },
         "required": [
@@ -9537,6 +9937,16 @@
             "items": {
               "$ref": "#/components/schemas/BookCategoryTranslationItemDto"
             }
+          },
+          "translation": {
+            "nullable": true,
+            "description": "Resolved translation for the requested Accept-Language header, with fallback to the first available translation. Null when the category has no translations.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BookCategoryTranslationItemDto"
+              }
+            ]
           }
         },
         "required": [
@@ -10031,10 +10441,6 @@
       "UpdateGalleryImageDto": {
         "type": "object",
         "properties": {
-          "media_id": {
-            "type": "string",
-            "format": "uuid"
-          },
           "category_id": {
             "type": "string",
             "format": "uuid"
@@ -10139,6 +10545,16 @@
             "items": {
               "$ref": "#/components/schemas/GalleryCategoryTranslationItemDto"
             }
+          },
+          "translation": {
+            "nullable": true,
+            "description": "Resolved translation for the requested Accept-Language header, with fallback to the first available translation. Null when the category has no translations.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GalleryCategoryTranslationItemDto"
+              }
+            ]
           }
         },
         "required": [
@@ -10708,6 +11124,16 @@
             "items": {
               "$ref": "#/components/schemas/AcademicPaperCategoryTranslationItemDto"
             }
+          },
+          "translation": {
+            "nullable": true,
+            "description": "Resolved translation for the requested Accept-Language header, with fallback to the first available translation. Null when the category has no translations.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AcademicPaperCategoryTranslationItemDto"
+              }
+            ]
           }
         },
         "required": [
@@ -10929,6 +11355,11 @@
           "created_at": {
             "type": "string",
             "example": "2024-01-01T00:00:00.000Z"
+          },
+          "unsubscribe_token": {
+            "type": "string",
+            "example": "a3f1c0...e8",
+            "description": "HMAC-signed token, returned only on subscribe / resubscribe. Required body field for the public POST /unsubscribe; embed it in unsubscribe links inside emails. Not present on admin list responses."
           }
         },
         "required": [
@@ -10971,10 +11402,16 @@
             "type": "string",
             "example": "reader@example.com",
             "format": "email"
+          },
+          "token": {
+            "type": "string",
+            "example": "f3a8...c2",
+            "description": "Unsubscribe token returned from POST /newsletter/subscribe. Required to prove ownership and prevent mass-unsubscribe by email enumeration."
           }
         },
         "required": [
-          "email"
+          "email",
+          "token"
         ]
       },
       "NewsletterMessageResponseDto": {
@@ -11060,8 +11497,8 @@
           },
           "visitor_phone": {
             "type": "string",
-            "example": "+9647001234567",
-            "description": "E.164 format required (e.g. +9647001234567)"
+            "example": "+9647801234567",
+            "description": "E.164 format required (e.g. +9647801234567)"
           },
           "visitor_country": {
             "type": "string",
@@ -11549,7 +11986,7 @@
           "contact": {
             "type": "string",
             "example": "+9647801234567",
-            "description": "Phone number or email address provided by the contestant"
+            "description": "Phone number (E.164-ish: optional + and digits) or email address. The service validates the format against `contactType`."
           },
           "contactType": {
             "type": "string",
@@ -11639,7 +12076,7 @@
             "description": "Attempt ID received from POST /start"
           },
           "answers": {
-            "description": "One entry per question; unanswered questions score 0",
+            "description": "One entry per question. Duplicate question_id entries are ignored at scoring time; the count must match the total number of questions.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SubmitAnswerDto"

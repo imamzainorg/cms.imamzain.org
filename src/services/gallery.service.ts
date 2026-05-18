@@ -42,5 +42,10 @@ export const galleryService = {
 
 	remove: (id: string) => api.delete(`/gallery/${id}`),
 
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<GalleryImage>>("/gallery/trash", { params }),
+
+	restore: (id: string) => api.post<GalleryImage>(`/gallery/${id}/restore`),
+
 	listCategories: () => api.get<PaginatedResponse<GalleryCategory>>("/gallery-categories"),
 }

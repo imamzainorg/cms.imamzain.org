@@ -41,6 +41,11 @@ export const papersService = {
 
 	remove: (id: string) => api.delete(`/academic-papers/${id}`),
 
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<AcademicPaper>>("/academic-papers/trash", { params }),
+
+	restore: (id: string) => api.post<AcademicPaper>(`/academic-papers/${id}/restore`),
+
 	listCategories: () =>
 		api.get<PaginatedResponse<AcademicPaperCategory>>("/academic-paper-categories"),
 }

@@ -8,7 +8,10 @@ export const auditLogsService = {
 		user_id?: string
 		action?: string
 		resource_type?: string
+		resource_id?: string
 		from?: string
 		to?: string
 	}) => api.get<PaginatedResponse<AuditLog>>("/audit-logs", { params }),
+
+	get: (id: string) => api.get<AuditLog>(`/audit-logs/${id}`),
 }

@@ -47,5 +47,10 @@ export const booksService = {
 
 	remove: (id: string) => api.delete(`/books/${id}`),
 
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<Book>>("/books/trash", { params }),
+
+	restore: (id: string) => api.post<Book>(`/books/${id}/restore`),
+
 	listCategories: () => api.get<PaginatedResponse<BookCategory>>("/book-categories"),
 }

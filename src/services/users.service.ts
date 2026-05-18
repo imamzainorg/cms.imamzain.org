@@ -10,7 +10,7 @@ export const usersService = {
 	create: (body: { username: string; password: string }) =>
 		api.post<UserDetail>("/users", body),
 
-	update: (id: string, body: { username?: string }) =>
+	update: (id: string, body: { username?: string; is_active?: boolean }) =>
 		api.patch<UserDetail>(`/users/${id}`, body),
 
 	remove: (id: string) => api.delete(`/users/${id}`),

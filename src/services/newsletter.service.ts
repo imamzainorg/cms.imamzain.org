@@ -7,7 +7,11 @@ export const newsletterService = {
 
 	subscribe: (email: string) => api.post("/newsletter/subscribe", { email }),
 
-	unsubscribe: (email: string) => api.post("/newsletter/unsubscribe", { email }),
+	unsubscribePublic: (email: string) => api.post("/newsletter/unsubscribe", { email }),
+
+	unsubscribeById: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/unsubscribe`),
+
+	resubscribeById: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/resubscribe`),
 
 	remove: (id: string) => api.delete(`/newsletter/subscribers/${id}`),
 }

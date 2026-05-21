@@ -156,7 +156,7 @@ export default function BookForm({ book }: { book?: Book }) {
 				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-gray-900">بيانات الكتاب</h3>
-						<button type="button" onClick={addTranslation} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"><Plus className="h-4 w-4" />إضافة لغة</button>
+						<button type="button" onClick={addTranslation} className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] hover:border-[hsl(var(--primary)/0.6)] transition-colors"><Plus className="h-4 w-4" strokeWidth={1.6} />إضافة لغة</button>
 					</div>
 
 					<div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
@@ -282,11 +282,11 @@ export default function BookForm({ book }: { book?: Book }) {
 				</div>
 
 				<div className="flex flex-col gap-2">
-					<button type="submit" disabled={isSaving} className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white font-medium rounded-md hover:bg-primary/90 disabled:opacity-50">
-						{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+					<button type="submit" disabled={isSaving} className="cursor-pointer w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white font-semibold rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 disabled:cursor-not-allowed transition-all active:translate-y-px">
+						{isSaving && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} />}
 						{book ? "تحديث الكتاب" : "إنشاء كتاب"}
 					</button>
-					<button type="button" onClick={() => router.push("/dashboard/books")} disabled={isSaving} className="w-full px-6 py-2.5 border border-gray-300 font-medium rounded-md text-gray-700 hover:bg-gray-50">إلغاء</button>
+					<button type="button" onClick={() => router.push("/dashboard/books")} disabled={isSaving} className="cursor-pointer w-full px-6 py-2.5 border border-[hsl(var(--border-strong))] font-medium rounded-md text-foreground bg-white hover:bg-surface-muted disabled:opacity-50 transition-colors">إلغاء</button>
 				</div>
 			</aside>
 		</form>

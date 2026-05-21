@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import type { Post, PostStatus } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
+import { useListPage } from "@/lib/use-list-page"
 import {
 	Plus,
 	Edit2,
@@ -38,65 +39,47 @@ import {
 } from "@/lib/queries/posts"
 import { usePostCategoriesList } from "@/lib/queries/post-categories"
 
-type ViewMode = "table" | "grid"
-const VIEW_STORAGE_KEY = "posts:view"
-
 export default function PostsPage() {
 	const router = useRouter()
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(20)
-	const [search, setSearch] = useState("")
-	const [debouncedSearch, setDebouncedSearch] = useState("")
+
+	// Shared list-page state: pagination, debounced search, selection set,
+	// view-mode toggle persisted to localStorage under "posts:view".
+	const {
+		page,
+		setPage,
+		limit,
+		setLimit,
+		search,
+		setSearch,
+		debouncedSearch,
+		selected,
+		setSelected,
+		toggleSelected,
+		clearSelected,
+		selectMany,
+		viewMode,
+		setView,
+		resetPageAndSelection,
+	} = useListPage({ viewStorageKey: "posts:view" })
+
+	// Per-page filters not owned by useListPage. Each handler pipes through
+	// resetPageAndSelection so changing a filter takes the user back to page 1
+	// and drops any selection (which is page-scoped).
 	const [statusFilter, setStatusFilter] = useState<PostStatus>("all")
 	const [categoryFilter, setCategoryFilter] = useState("")
 	const [featuredOnly, setFeaturedOnly] = useState(false)
-	const [selected, setSelected] = useState<Set<string>>(new Set())
-	const [viewMode, setViewMode] = useState<ViewMode>("table")
-
-	useEffect(() => {
-		try {
-			const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
-			if (stored === "grid" || stored === "table") setViewMode(stored)
-		} catch {
-			/* SSR or no storage — keep default */
-		}
-	}, [])
-
-	const setView = (mode: ViewMode) => {
-		setViewMode(mode)
-		try {
-			window.localStorage.setItem(VIEW_STORAGE_KEY, mode)
-		} catch {
-			/* ignore */
-		}
-	}
-
-	useEffect(() => {
-		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
-			setPage(1)
-		}, 300)
-		return () => clearTimeout(t)
-	}, [search])
 
 	const onCategoryChange = (id: string) => {
 		setCategoryFilter(id)
-		setPage(1)
-		setSelected(new Set())
+		resetPageAndSelection()
 	}
 	const onStatusChange = (s: PostStatus) => {
 		setStatusFilter(s)
-		setPage(1)
-		setSelected(new Set())
-	}
-	const onLimitChange = (n: number) => {
-		setLimit(n)
-		setPage(1)
+		resetPageAndSelection()
 	}
 	const onFeaturedToggle = () => {
 		setFeaturedOnly((v) => !v)
-		setPage(1)
-		setSelected(new Set())
+		resetPageAndSelection()
 	}
 
 	const categoriesQuery = usePostCategoriesList({ limit: 100 })
@@ -147,17 +130,9 @@ export default function PostsPage() {
 		)
 	}
 
-	const toggleSelected = (id: string) => {
-		setSelected((prev) => {
-			const next = new Set(prev)
-			if (next.has(id)) next.delete(id)
-			else next.add(id)
-			return next
-		})
-	}
 	const toggleSelectAll = () => {
-		if (selected.size === posts.length) setSelected(new Set())
-		else setSelected(new Set(posts.map((p) => p.id)))
+		if (selected.size === posts.length) clearSelected()
+		else selectMany(posts.map((p) => p.id))
 	}
 
 	const handleBulkPublish = async (is_published: boolean) => {
@@ -175,7 +150,7 @@ export default function PostsPage() {
 			{
 				onSuccess: ({ data }) => {
 					toast.success(`${data.affected} مقالة ${is_published ? "نُشرت" : "سُحبت"}`)
-					setSelected(new Set())
+					clearSelected()
 				},
 				onError: (e) => toast.error(getErrorMessage(e, "فشلت العملية")),
 			},
@@ -195,7 +170,7 @@ export default function PostsPage() {
 		bulkDelete.mutate(ids, {
 			onSuccess: ({ data }) => {
 				toast.success(`تم حذف ${data.affected} مقالة`)
-				setSelected(new Set())
+				clearSelected()
 			},
 			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
 		})
@@ -372,7 +347,7 @@ export default function PostsPage() {
 						حذف
 					</button>
 					<button
-						onClick={() => setSelected(new Set())}
+						onClick={clearSelected}
 						className="cursor-pointer ms-auto text-xs text-[hsl(var(--foreground-muted))] hover:text-foreground hover:underline"
 					>
 						إلغاء التحديد
@@ -440,7 +415,7 @@ export default function PostsPage() {
 				/>
 			)}
 
-			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={onLimitChange} />
+			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={setLimit} />
 			{dialog}
 		</div>
 	)

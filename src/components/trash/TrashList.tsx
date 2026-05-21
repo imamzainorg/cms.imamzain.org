@@ -101,8 +101,12 @@ export default function TrashList<T>({
 				description={description}
 				icon={icon}
 				actions={
-					<button onClick={() => router.push(backHref)} className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
-						<ArrowRight className="h-4 w-4" />{backLabel}
+					<button
+						onClick={() => router.push(backHref)}
+						className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground border border-[hsl(var(--border-strong))] rounded-md hover:bg-surface-muted shadow-soft transition-colors"
+					>
+						<ArrowRight className="h-4 w-4" strokeWidth={1.6} />
+						{backLabel}
 					</button>
 				}
 			/>
@@ -158,9 +162,9 @@ export default function TrashList<T>({
 											<button
 												onClick={() => handleRestore(item)}
 												disabled={restoreMutation.isPending}
-												className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
+												className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 transition-all"
 											>
-												<RotateCcw className="h-3.5 w-3.5" />استعادة
+												<RotateCcw className="h-3.5 w-3.5" strokeWidth={1.6} />استعادة
 											</button>
 										</td>
 									</tr>

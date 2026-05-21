@@ -4,22 +4,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { toast, Toaster } from "sonner"
-import { AxiosError } from "axios"
 import { Loader2, Lock, User } from "lucide-react"
 import Image from "next/image"
-
-function extractMessage(error: unknown): string {
-	if (error instanceof AxiosError) {
-		const d = error.response?.data
-		if (!d) return `خطأ في الشبكة (${error.code ?? "لا استجابة"})`
-		const msg = d.message
-		if (Array.isArray(msg)) return msg.join(" · ")
-		if (typeof msg === "string" && msg) return msg
-		return `HTTP ${error.response?.status}: ${JSON.stringify(d).slice(0, 120)}`
-	}
-	if (error instanceof Error) return error.message
-	return "فشل تسجيل الدخول"
-}
+import { getErrorMessage } from "@/lib/api"
 
 export default function LoginPage() {
 	const router = useRouter()
@@ -36,8 +23,7 @@ export default function LoginPage() {
 			toast.success("تم تسجيل الدخول بنجاح")
 			router.push("/dashboard")
 		} catch (error: unknown) {
-			console.error("[login] error:", error)
-			toast.error(extractMessage(error))
+			toast.error(getErrorMessage(error, "فشل تسجيل الدخول"))
 		} finally {
 			setIsLoading(false)
 		}

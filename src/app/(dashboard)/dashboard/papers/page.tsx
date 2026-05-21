@@ -7,7 +7,7 @@ import { categoryName, pickTranslation } from "@/lib/i18n"
 import { Plus, Edit, Trash2, GraduationCap, ExternalLink, Search, Calendar, Tag, FileText, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -165,7 +165,7 @@ export default function PapersPage() {
 										)}
 									</div>
 									<div className="flex flex-col items-end gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-										<span className="text-[11px] text-gray-400">{p.created_at ? format(new Date(p.created_at), "dd/MM/yyyy") : ""}</span>
+										<span className="text-[11px] text-gray-400">{safeFormat(p.created_at, "dd/MM/yyyy", "")}</span>
 										<div className="flex gap-1">
 											<button onClick={() => router.push(`/dashboard/papers/${p.id}`)} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Edit className="h-4 w-4" /></button>
 											<button onClick={() => handleDelete(p.id)} className="cursor-pointer p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="حذف"><Trash2 className="h-4 w-4" /></button>

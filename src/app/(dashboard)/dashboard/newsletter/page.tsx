@@ -5,6 +5,7 @@ import type { Subscriber } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import Pagination from "@/components/ui/Pagination"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
@@ -177,7 +178,7 @@ export default function NewsletterPage() {
 										{s.is_active ? "نشط" : "معطّل"}
 									</span>
 								</td>
-								<td className="px-6 py-4 text-sm text-gray-500">{s.created_at ? format(new Date(s.created_at), "dd/MM/yyyy") : "—"}</td>
+								<td className="px-6 py-4 text-sm text-gray-500">{safeFormat(s.created_at, "dd/MM/yyyy")}</td>
 								<td className="px-6 py-4 text-left text-sm flex justify-end items-center gap-3">
 									<button onClick={() => toggleStatus(s)} className={`cursor-pointer text-sm font-medium ${s.is_active ? "text-red-600 hover:text-red-900" : "text-green-600 hover:text-green-900"}`}>
 										{s.is_active ? "تعطيل" : "تفعيل"}

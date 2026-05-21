@@ -12,7 +12,7 @@ import {
 	ClipboardList, Filter, X, ChevronDown, ChevronUp,
 	Plus, Pencil, Trash2, LogIn, LogOut, Upload, Eye, Send, type LucideIcon,
 } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
 import { useAuditLogsList } from "@/lib/queries/audit-logs"
 
@@ -212,7 +212,7 @@ export default function AuditLogsPage() {
 												)}
 											</div>
 											<div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-												<span>{log.created_at ? format(new Date(log.created_at), "dd/MM/yyyy — HH:mm") : "—"}</span>
+												<span>{safeFormat(log.created_at, "dd/MM/yyyy — HH:mm")}</span>
 												{(hasChanges || log.ip_address) && (
 													<button onClick={() => setExpanded(isExp ? null : log.id)} className="hover:text-primary flex items-center gap-1 cursor-pointer">
 														{isExp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}

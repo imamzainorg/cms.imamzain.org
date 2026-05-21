@@ -7,7 +7,7 @@ import { getErrorMessage } from "@/lib/api"
 import { categoryName } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -287,7 +287,7 @@ function GalleryImageDialog({
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">رُفعت في</label>
-									<p className="px-3 py-2 text-sm text-gray-600">{format(new Date(image.created_at), "dd/MM/yyyy")}</p>
+									<p className="px-3 py-2 text-sm text-gray-600">{safeFormat(image.created_at, "dd/MM/yyyy")}</p>
 								</div>
 							</div>
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import type { NewsletterCampaign, CampaignStatus } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import { Send, Plus, Mail, Trash2, Clock, Edit, Pause } from "lucide-react"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
@@ -150,7 +150,7 @@ export default function CampaignsPage() {
 											{c.scheduled_at && c.status === "scheduled" && (
 												<p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1">
 													<Clock className="h-3 w-3" />
-													{format(new Date(c.scheduled_at), "dd/MM/yyyy HH:mm")}
+													{safeFormat(c.scheduled_at, "dd/MM/yyyy HH:mm")}
 												</p>
 											)}
 										</td>
@@ -176,7 +176,7 @@ export default function CampaignsPage() {
 											) : <span className="text-gray-400">—</span>}
 										</td>
 										<td className="px-6 py-3 text-sm text-gray-500">
-											{c.sent_at ? format(new Date(c.sent_at), "dd/MM/yyyy") : c.created_at ? format(new Date(c.created_at), "dd/MM/yyyy") : "—"}
+											{safeFormat(c.sent_at ?? c.created_at, "dd/MM/yyyy")}
 										</td>
 										<td className="px-6 py-3 text-left" onClick={(e) => e.stopPropagation()}>
 											<div className="flex justify-end gap-1">

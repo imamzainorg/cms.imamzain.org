@@ -2,7 +2,7 @@
 
 import { useResourceAuditHistory } from "@/lib/queries/audit-logs"
 import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import { Activity, Clock, Loader2 } from "lucide-react"
 
 type Props = {
@@ -56,7 +56,7 @@ export default function AuditPanel({ resource_type, resource_id, title = "الن
 									</p>
 									<p className="text-gray-400 text-[11px] mt-0.5 flex items-center gap-1">
 										<Clock className="h-2.5 w-2.5" />
-										{log.created_at ? format(new Date(log.created_at), "dd/MM/yyyy — HH:mm") : "—"}
+										{safeFormat(log.created_at, "dd/MM/yyyy — HH:mm")}
 									</p>
 								</div>
 							</li>

@@ -7,7 +7,7 @@ import { authService } from "@/services/auth.service"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { Loader2, Lock, Shield, Calendar, KeyRound, Check } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 
 // Localized labels for permission resource and verb segments.
 // Permissions in the API are slug-shaped like "posts:create" or "newsletter:read".
@@ -111,7 +111,7 @@ export default function ProfilePage() {
 							<h2 className="text-lg font-semibold text-gray-900">{user.username}</h2>
 							<p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
 								<Calendar className="h-3 w-3" />
-								انضمّ {user.created_at ? format(new Date(user.created_at), "dd/MM/yyyy") : "—"}
+								انضمّ {safeFormat(user.created_at, "dd/MM/yyyy")}
 							</p>
 						</div>
 						<div className="border-t border-gray-100 mt-5 pt-4 space-y-3">

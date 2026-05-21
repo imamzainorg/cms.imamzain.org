@@ -8,7 +8,7 @@ import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import { ListSkeleton } from "@/components/ui/Skeleton"
 import { Trophy, Search, CheckCircle2, Clock, Award, Medal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import {
 	useContestAttemptsList,
 	useContestAttemptsCount,
@@ -222,7 +222,7 @@ export default function ContestPage() {
 												{a.is_submitted ? "مُسلَّمة" : "قيد التقدم"}
 											</span>
 										</td>
-										<td className="px-4 py-3 text-sm text-gray-500">{a.created_at ? format(new Date(a.created_at), "dd/MM/yyyy HH:mm") : "—"}</td>
+										<td className="px-4 py-3 text-sm text-gray-500">{safeFormat(a.created_at, "dd/MM/yyyy HH:mm")}</td>
 									</tr>
 								)
 							})}

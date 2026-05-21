@@ -15,7 +15,7 @@ import {
 	Copy, Trash2, Loader2, Image as ImageIcon, Search, Upload, Pencil, Save,
 	FileText, Grid3x3, List as ListIcon, Download, Library, RefreshCw,
 } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import {
 	useMediaList,
 	useUploadMedia,
@@ -266,7 +266,7 @@ export default function MediaPage() {
 												)
 											) : "—"}
 										</td>
-										<td className="px-4 py-2.5 text-sm text-gray-500">{m.created_at ? format(new Date(m.created_at), "dd/MM/yyyy") : "—"}</td>
+										<td className="px-4 py-2.5 text-sm text-gray-500">{safeFormat(m.created_at, "dd/MM/yyyy")}</td>
 										<td className="px-4 py-2.5 text-left" onClick={(e) => e.stopPropagation()}>
 											<div className="flex justify-end gap-1">
 												<button onClick={() => setEditing(m)} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Pencil className="h-4 w-4" /></button>

@@ -14,7 +14,7 @@ import {
 	Plus, Trash2, Loader2, Users as UsersIcon, X, Shield, Pencil, Search, Power,
 	Check, UserPlus, KeyRound,
 } from "lucide-react"
-import { format } from "date-fns"
+import { safeFormat } from "@/lib/dates"
 import {
 	useUsersList,
 	useCreateUser,
@@ -280,7 +280,7 @@ export default function UsersPage() {
 												{u.is_active ? "نشط" : "معطّل"}
 											</span>
 										</td>
-										<td className="px-6 py-3.5 text-sm text-gray-500 tabular-nums">{u.created_at ? format(new Date(u.created_at), "dd/MM/yyyy") : "—"}</td>
+										<td className="px-6 py-3.5 text-sm text-gray-500 tabular-nums">{safeFormat(u.created_at, "dd/MM/yyyy")}</td>
 										<td className="px-6 py-3.5 text-left">
 											<div className="flex items-center justify-end gap-1.5">
 												<button onClick={(e) => { e.stopPropagation(); toggleActive(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning-soft))]" title={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"} aria-label={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"}><Power className="h-4 w-4" strokeWidth={1.6} /></button>

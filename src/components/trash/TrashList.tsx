@@ -13,8 +13,8 @@ import {
 import { ArrowRight, Loader2, RotateCcw, Trash2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
-import { format } from "date-fns"
 import { getErrorMessage } from "@/lib/api"
+import { safeFormat } from "@/lib/dates"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import Pagination from "@/components/ui/Pagination"
@@ -156,7 +156,7 @@ export default function TrashList<T>({
 											</div>
 										</td>
 										<td className="px-6 py-4 text-sm text-gray-500">
-											{createdAt ? format(new Date(createdAt), "dd/MM/yyyy") : "—"}
+											{safeFormat(createdAt, "dd/MM/yyyy")}
 										</td>
 										<td className="px-6 py-4 text-left">
 											<button

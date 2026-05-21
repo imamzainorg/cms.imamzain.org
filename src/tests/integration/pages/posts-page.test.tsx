@@ -90,4 +90,65 @@ describe("PostsPage", () => {
 		expect(screen.getAllByText("منشور").length).toBeGreaterThanOrEqual(1)
 		expect(screen.getAllByText("مسودة").length).toBeGreaterThanOrEqual(1)
 	})
+
+	it("sends ?status=published to the API when the published tab is clicked", async () => {
+		// Behavior test, not render test: prove the filter actually reaches
+		// the server. Without this, the filter UI could be silently broken
+		// and the render-only tests above would pass.
+		const captured: string[] = []
+		server.use(
+			http.get(`${API}/posts/admin`, ({ request }) => {
+				captured.push(new URL(request.url).searchParams.get("status") ?? "(none)")
+				return HttpResponse.json(wrap(paginated([mockPost])))
+			}),
+			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
+		)
+		renderWithQueryClient(<PostsPage />)
+		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+
+		// Initial load defaults to status=all (the page sends every filter,
+		// including the default, so the server signature stays predictable).
+		const initialCount = captured.length
+		expect(captured[initialCount - 1]).toBe("all")
+
+		// Click the "منشور" tab. There's also a status pill labelled "منشور"
+		// on each post card; the toolbar tab is the first occurrence and is
+		// the only one inside a <button>.
+		const publishedTab = screen.getAllByText("منشور").find(
+			(el) => el.closest("button") !== null && el.closest("[role='dialog']") === null,
+		)!
+		await act(async () => { fireEvent.click(publishedTab.closest("button")!) })
+
+		await waitFor(() => {
+			expect(captured[captured.length - 1]).toBe("published")
+		})
+	})
+
+	it("persists the view-mode toggle to localStorage", async () => {
+		// Default mode is "table" — flip to "grid" and re-mount; the
+		// useListPage hook should hydrate from localStorage on the second
+		// mount and render grid markup straight away.
+		server.use(
+			http.get(`${API}/posts/admin`, () => HttpResponse.json(wrap(paginated([mockPost])))),
+			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
+		)
+		localStorage.clear()
+		const first = renderWithQueryClient(<PostsPage />)
+		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+
+		const gridToggle = screen.getByTitle("عرض البطاقات")
+		await act(async () => { fireEvent.click(gridToggle) })
+
+		expect(localStorage.getItem("posts:view")).toBe("grid")
+		first.unmount()
+
+		// Fresh mount: should pick up the stored "grid" preference.
+		renderWithQueryClient(<PostsPage />)
+		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		const tableToggle = screen.getByTitle("عرض الجدول")
+		// aria-pressed reflects active toggle; "grid" should be pressed now.
+		expect(tableToggle.getAttribute("aria-pressed")).toBe("false")
+		expect(screen.getByTitle("عرض البطاقات").getAttribute("aria-pressed")).toBe("true")
+		localStorage.clear()
+	})
 })

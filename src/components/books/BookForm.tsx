@@ -15,7 +15,8 @@ import { useCreateBook, useUpdateBook } from "@/lib/queries/books"
 import { useBookCategoriesList } from "@/lib/queries/book-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 import MediaInput from "@/components/ui/MediaInput"
-import { Loader2, Plus, Trash2, Globe } from "lucide-react"
+import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
+import { Loader2 } from "lucide-react"
 
 const translationSchema = z.object({
 	lang: z.string().min(2),
@@ -55,17 +56,37 @@ export default function BookForm({ book }: { book?: Book }) {
 	const loadingCats = categoriesQuery.isLoading
 	const [activeLang, setActiveLang] = useState("ar")
 
+	const blankTranslation = (lang = "ar", is_default = true) => ({
+		lang,
+		title: "",
+		author: "",
+		publisher: "",
+		description: "",
+		series: "",
+		is_default,
+	})
+
 	const buildDefaults = (): BookFormData => {
 		if (!book) {
 			return {
 				category_id: "",
 				cover_image_id: null,
 				publish_year: String(new Date().getFullYear()),
-				translations: [{ lang: "ar", title: "", author: "", publisher: "", description: "", series: "", is_default: true }],
+				translations: [blankTranslation()],
 			}
 		}
-		const all = book.book_translations ?? []
-		const fallback = all.length === 0 && book.translation ? [book.translation] : all
+		const raw = pickTranslationsOrEmpty(book.book_translations, book.translation)
+		const translations = raw.length
+			? raw.map((t) => ({
+				lang: t.lang,
+				title: t.title ?? "",
+				author: t.author ?? "",
+				publisher: t.publisher ?? "",
+				description: t.description ?? "",
+				series: t.series ?? "",
+				is_default: t.is_default ?? false,
+			}))
+			: [blankTranslation()]
 		return {
 			category_id: book.category_id ?? "",
 			cover_image_id: book.cover_image_id ?? null,
@@ -74,17 +95,7 @@ export default function BookForm({ book }: { book?: Book }) {
 			publish_year: book.publish_year ?? "",
 			part_number: book.part_number ?? undefined,
 			parts: book.parts ?? undefined,
-			translations: fallback.length
-				? fallback.map((t) => ({
-					lang: t.lang,
-					title: t.title ?? "",
-					author: t.author ?? "",
-					publisher: t.publisher ?? "",
-					description: t.description ?? "",
-					series: t.series ?? "",
-					is_default: t.is_default ?? false,
-				}))
-				: [{ lang: "ar", title: "", author: "", publisher: "", description: "", series: "", is_default: true }],
+			translations,
 		}
 	}
 
@@ -112,8 +123,17 @@ export default function BookForm({ book }: { book?: Book }) {
 		const used = translations.map((t) => t.lang)
 		const next = languages.find((l) => !used.includes(l.code))
 		if (!next) { toast.error("لا توجد لغات إضافية متاحة"); return }
-		append({ lang: next.code, title: "", author: "", publisher: "", description: "", series: "", is_default: false })
+		append(blankTranslation(next.code, false))
 		setActiveLang(next.code)
+	}
+
+	const removeTranslation = (index: number) => {
+		const removedLang = translations[index]?.lang
+		remove(index)
+		if (activeLang === removedLang) {
+			const remaining = translations.filter((_, i) => i !== index)
+			setActiveLang(remaining[0]?.lang ?? "ar")
+		}
 	}
 
 	const onSubmit = async (data: BookFormData) => {
@@ -153,27 +173,16 @@ export default function BookForm({ book }: { book?: Book }) {
 	return (
 		<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 			<div className="lg:col-span-2 space-y-6">
-				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6">
-					<div className="flex items-center justify-between mb-4">
-						<h3 className="text-lg font-medium text-gray-900">بيانات الكتاب</h3>
-						<button type="button" onClick={addTranslation} className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] hover:border-[hsl(var(--primary)/0.6)] transition-colors"><Plus className="h-4 w-4" strokeWidth={1.6} />إضافة لغة</button>
-					</div>
-
-					<div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
-						{fields.map((field, index) => (
-							<button key={field.id} type="button" onClick={() => setActiveLang(translations[index]?.lang)}
-								className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeLang === translations[index]?.lang ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-								<Globe className="inline h-4 w-4 ml-1" />{languageLabel(translations[index]?.lang)}
-								{translations[index]?.is_default && <span className="mr-1 text-xs text-gray-400">(الافتراضية)</span>}
-								{fields.length > 1 && (
-									<span onClick={(e) => { e.stopPropagation(); remove(index); if (activeLang === translations[index]?.lang) setActiveLang(translations[0]?.lang) }} className="mr-2 text-gray-400 hover:text-red-500 cursor-pointer"><Trash2 className="inline h-3 w-3" /></span>
-								)}
-							</button>
-						))}
-					</div>
-
-					{fields.map((field, index) => (
-						<div key={field.id} className={activeLang === translations[index]?.lang ? "block space-y-4" : "hidden"}>
+				<TranslationTabs
+					fields={fields}
+					translations={translations}
+					activeLang={activeLang}
+					onChangeActiveLang={(l) => setActiveLang(l)}
+					onAdd={addTranslation}
+					onRemove={removeTranslation}
+					title="بيانات الكتاب"
+					renderTranslation={(index) => (
+						<>
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
@@ -225,9 +234,9 @@ export default function BookForm({ book }: { book?: Book }) {
 									)}
 								/>
 							</div>
-						</div>
-					))}
-				</div>
+						</>
+					)}
+				/>
 			</div>
 
 			<aside className="space-y-6">

@@ -14,7 +14,8 @@ import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
 import { useCreatePaper, useUpdatePaper } from "@/lib/queries/papers"
 import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
-import { Loader2, Plus, Trash2, Globe, FileText, Upload } from "lucide-react"
+import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
+import { Loader2, Plus, Trash2, FileText, Upload } from "lucide-react"
 import { mediaService } from "@/services/media.service"
 
 const translationSchema = z.object({
@@ -55,7 +56,18 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const [newKeyword, setNewKeyword] = useState("")
 	const [uploadingPdf, setUploadingPdf] = useState(false)
 
-	// Build defaults from incoming paper or create-mode blank state.
+	type PaperTranslationField = PaperFormData["translations"][number]
+	const blankTranslation = (lang = "ar", is_default = true): PaperTranslationField => ({
+		lang,
+		title: "",
+		abstract: "",
+		authors: [],
+		keywords: [],
+		publication_venue: "",
+		page_count: undefined,
+		is_default,
+	})
+
 	// API returns `academic_paper_translations` per the OpenAPI spec; if empty, fall back
 	// to the resolved `translation` (singular) so editors at least see what's there.
 	const buildDefaults = (): PaperFormData => {
@@ -64,27 +76,30 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				category_id: "",
 				published_year: String(new Date().getFullYear()),
 				pdf_url: "",
-				translations: [{ lang: "ar", title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: true }],
+				translations: [blankTranslation()],
 			}
 		}
-		const all = paper.academic_paper_translations ?? []
-		const fallback = all.length === 0 && paper.translation ? [paper.translation] : all
+		const raw = pickTranslationsOrEmpty(
+			paper.academic_paper_translations,
+			paper.translation,
+		)
+		const translations = raw.length
+			? raw.map((t): PaperTranslationField => ({
+				lang: t.lang,
+				title: t.title ?? "",
+				abstract: t.abstract ?? "",
+				authors: t.authors ?? [],
+				keywords: t.keywords ?? [],
+				publication_venue: t.publication_venue ?? "",
+				page_count: t.page_count ?? undefined,
+				is_default: t.is_default ?? false,
+			}))
+			: [blankTranslation()]
 		return {
 			category_id: paper.category_id ?? "",
 			published_year: paper.published_year ?? "",
 			pdf_url: paper.pdf_url ?? "",
-			translations: fallback.length
-				? fallback.map((t) => ({
-					lang: t.lang,
-					title: t.title ?? "",
-					abstract: t.abstract ?? "",
-					authors: t.authors ?? [],
-					keywords: t.keywords ?? [],
-					publication_venue: t.publication_venue ?? "",
-					page_count: t.page_count ?? undefined,
-					is_default: t.is_default ?? false,
-				}))
-				: [{ lang: "ar", title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: true }],
+			translations,
 		}
 	}
 
@@ -121,8 +136,17 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		const used = translations.map((t) => t.lang)
 		const next = languages.find((l) => !used.includes(l.code))
 		if (!next) { toast.error("لا توجد لغات إضافية متاحة"); return }
-		append({ lang: next.code, title: "", abstract: "", authors: [], keywords: [], publication_venue: "", page_count: undefined, is_default: false })
+		append(blankTranslation(next.code, false))
 		setActiveLang(next.code)
+	}
+
+	const removeTranslation = (index: number) => {
+		const removedLang = translations[index]?.lang
+		remove(index)
+		if (activeLang === removedLang) {
+			const remaining = translations.filter((_, i) => i !== index)
+			setActiveLang(remaining[0]?.lang ?? "ar")
+		}
 	}
 
 	const addAuthor = (index: number) => {
@@ -228,25 +252,16 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				</div>
 			</div>
 
-			<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6">
-				<div className="flex items-center justify-between mb-4">
-					<h3 className="text-lg font-medium text-gray-900">الترجمات</h3>
-					<button type="button" onClick={addTranslation} className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] hover:border-[hsl(var(--primary)/0.6)] transition-colors"><Plus className="h-4 w-4" strokeWidth={1.6} />إضافة لغة</button>
-				</div>
-				<div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-					{fields.map((field, index) => (
-						<button key={field.id} type="button" onClick={() => setActiveLang(translations[index]?.lang)}
-							className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeLang === translations[index]?.lang ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-							<Globe className="inline h-4 w-4 ml-1" />{languageLabel(translations[index]?.lang)}
-							{translations[index]?.is_default && <span className="mr-1 text-xs text-gray-400">(الافتراضية)</span>}
-							{fields.length > 1 && (
-								<span onClick={(e) => { e.stopPropagation(); remove(index); if (activeLang === translations[index]?.lang) setActiveLang(translations[0]?.lang) }} className="mr-2 text-gray-400 hover:text-red-500 cursor-pointer"><Trash2 className="inline h-3 w-3" /></span>
-							)}
-						</button>
-					))}
-				</div>
-				{fields.map((field, index) => (
-					<div key={field.id} className={activeLang === translations[index]?.lang ? "block space-y-4" : "hidden"}>
+			<TranslationTabs
+				fields={fields}
+				translations={translations}
+				activeLang={activeLang}
+				onChangeActiveLang={(l) => setActiveLang(l)}
+				onAdd={addTranslation}
+				onRemove={removeTranslation}
+				title="الترجمات"
+				renderTranslation={(index) => (
+					<>
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">اللغة *</label>
@@ -322,9 +337,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 								<input type="number" {...register(`translations.${index}.page_count`, { valueAsNumber: true })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							</div>
 						</div>
-					</div>
-				))}
-			</div>
+					</>
+				)}
+			/>
 
 			<div className="flex gap-3">
 				<button type="submit" disabled={isSaving} className="cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-semibold rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 disabled:cursor-not-allowed transition-all active:translate-y-px">

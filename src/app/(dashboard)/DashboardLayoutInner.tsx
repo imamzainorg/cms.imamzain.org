@@ -6,6 +6,7 @@ import { Toaster } from "sonner"
 import { useAuthStore } from "@/store/auth"
 import Sidebar from "@/components/layout/Sidebar"
 import Header from "@/components/layout/Header"
+import { PageTitleProvider } from "@/lib/page-title"
 
 export default function DashboardLayoutInner({
 	children,
@@ -36,7 +37,7 @@ export default function DashboardLayoutInner({
 	if (!user) return null
 
 	return (
-		<>
+		<PageTitleProvider>
 			<div className="min-h-screen bg-gray-50">
 				<Sidebar />
 				<div className="lg:pr-64">
@@ -47,6 +48,6 @@ export default function DashboardLayoutInner({
 				</div>
 			</div>
 			<Toaster position="top-right" />
-		</>
+		</PageTitleProvider>
 	)
 }

@@ -1,6 +1,10 @@
+"use client"
+
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { useEffect } from "react"
+import { usePageTitle } from "@/lib/page-title"
 
 type Crumb = { label: string; href?: string }
 
@@ -23,6 +27,11 @@ export default function PageHeader({
 	stats,
 	className = "",
 }: Props) {
+	// Publish our title into the shared slot so the Header above can echo it.
+	const ctx = usePageTitle()
+	useEffect(() => {
+		ctx?.setTitle(title)
+	}, [ctx, title])
 	return (
 		<div className={`bg-white rounded-xl border border-[hsl(var(--border))] shadow-soft px-6 py-5 ${className}`}>
 			{breadcrumbs && breadcrumbs.length > 0 && (

@@ -6,36 +6,15 @@ import { usePathname } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import Sidebar from "./Sidebar"
-
-const pageTitles: Record<string, string> = {
-	"/dashboard": "لوحة التحكم",
-	"/dashboard/posts": "المقالات",
-	"/dashboard/posts/new": "مقالة جديدة",
-	"/dashboard/post-categories": "تصنيفات المقالات",
-	"/dashboard/books": "المكتبة",
-	"/dashboard/books/new": "كتاب جديد",
-	"/dashboard/book-categories": "تصنيفات الكتب",
-	"/dashboard/papers": "الأبحاث العلمية",
-	"/dashboard/papers/new": "بحث جديد",
-	"/dashboard/paper-categories": "تصنيفات الأبحاث",
-	"/dashboard/gallery": "معرض الصور",
-	"/dashboard/gallery-categories": "تصنيفات المعرض",
-	"/dashboard/media": "مكتبة الوسائط",
-	"/dashboard/contacts": "رسائل التواصل",
-	"/dashboard/proxy-visits": "طلبات الزيارة بالإنابة",
-	"/dashboard/newsletter": "النشرة البريدية",
-	"/dashboard/contest": "المسابقات",
-	"/dashboard/users": "المستخدمون",
-	"/dashboard/roles": "الأدوار والصلاحيات",
-	"/dashboard/languages": "اللغات",
-	"/dashboard/audit-logs": "سجلات التدقيق",
-	"/dashboard/profile": "حسابي",
-	"/dashboard/settings": "الإعدادات",
-}
+import { usePageTitle } from "@/lib/page-title"
 
 export default function Header() {
 	const { user, logout } = useAuthStore()
 	const pathname = usePathname()
+	// Title is published by each route's <PageHeader> into PageTitleContext.
+	// Falls back to the dashboard label so the bar isn't ever empty.
+	const titleFromContext = usePageTitle()?.title
+	const title = titleFromContext || "لوحة التحكم"
 	const [showMobileMenu, setShowMobileMenu] = useState(false)
 	const [showUserMenu, setShowUserMenu] = useState(false)
 	const userMenuRef = useRef<HTMLDivElement>(null)
@@ -67,19 +46,6 @@ export default function Header() {
 		setShowMobileMenu(false)
 	}, [pathname])
 
-	const getPageTitle = () => {
-		if (pageTitles[pathname]) return pageTitles[pathname]
-		if (pathname.match(/\/dashboard\/[^/]+\/[^/]+$/)) {
-			const basePath = pathname.replace(/\/[^/]+$/, "")
-			const base = pageTitles[basePath]
-			return base ? `تعديل — ${base}` : "تعديل"
-		}
-		for (const [path, title] of Object.entries(pageTitles)) {
-			if (pathname.startsWith(path) && path !== "/dashboard") return title
-		}
-		return "لوحة التحكم"
-	}
-
 	return (
 		<>
 			<header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
@@ -94,7 +60,7 @@ export default function Header() {
 								<Menu className="h-6 w-6" />
 							</button>
 							<h2 className="text-xl font-semibold text-gray-900">
-								{getPageTitle()}
+								{title}
 							</h2>
 						</div>
 

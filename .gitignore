@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local Claude Code agent state (memory, settings, transcripts)
+.claude/
+
+# design-package handoff bundle from Claude Design — reference material,
+# re-fetchable via the project's design link. Not source of truth.
+/.design-pkg/

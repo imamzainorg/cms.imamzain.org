@@ -14,8 +14,9 @@ describe("Pagination", () => {
 		render(
 			<Pagination page={2} pages={5} total={100} limit={20} onPage={() => {}} />,
 		)
-		// fromIdx = 21, toIdx = 40, total = 100 (formatted as ar-EG locale)
-		expect(screen.getByText("21–40")).toBeInTheDocument()
+		// fromIdx = 21 → ٢١, toIdx = 40 → ٤٠ — converted to Arabic-Indic digits
+		// per the design system. The text node renders as "٢١–٤٠" inside the span.
+		expect(screen.getByText("٢١–٤٠")).toBeInTheDocument()
 	})
 
 	it("calls onPage with page - 1 when Previous is clicked", () => {

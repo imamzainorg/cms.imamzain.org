@@ -50,17 +50,19 @@ describe("DashboardPage", () => {
 		renderWithQueryClient(<DashboardPage />)
 		// Greeting shows username
 		await waitFor(() => expect(screen.getByText(/admin/)).toBeInTheDocument())
-		// Stats from /dashboard/stats
+		// Stats from /dashboard/stats — rendered as Arabic-Indic digits per the
+		// design system (٠١٢٣٤٥٦٧٨٩, Latin comma for thousands). Some values
+		// appear twice (hero summary + stat card) so use getAllByText.
 		await waitFor(() => {
-			expect(screen.getByText("42")).toBeInTheDocument()
-			expect(screen.getByText("13")).toBeInTheDocument()
-			expect(screen.getByText("7")).toBeInTheDocument()
-			expect(screen.getByText("88")).toBeInTheDocument()
+			expect(screen.getAllByText("٤٢").length).toBeGreaterThan(0)
+			expect(screen.getByText("١٣")).toBeInTheDocument()
+			expect(screen.getByText("٧")).toBeInTheDocument()
+			expect(screen.getByText("٨٨")).toBeInTheDocument()
 		})
-		// Action counts
-		expect(screen.getByText("5")).toBeInTheDocument()
-		expect(screen.getByText("2")).toBeInTheDocument()
-		expect(screen.getByText("100")).toBeInTheDocument()
+		// Inbox / action counts
+		expect(screen.getByText("٥")).toBeInTheDocument()
+		expect(screen.getByText("٢")).toBeInTheDocument()
+		expect(screen.getByText("١٠٠")).toBeInTheDocument()
 	})
 
 	it("renders 'no posts yet' empty state when there are no recent posts", async () => {

@@ -68,6 +68,10 @@ export const queryKeys = {
 		lists: () => [...queryKeys.contacts.all, "list"] as const,
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.contacts.lists(), params] as const,
+		// Single stable key for "all contacts in the inbox" — the backend rejects
+		// ?status= as non-whitelisted, so every consumer shares one cache entry
+		// and derives filtered views / counts client-side.
+		inbox: () => [...queryKeys.contacts.all, "inbox"] as const,
 	},
 	media: {
 		all: ["media"] as const,
@@ -92,6 +96,8 @@ export const queryKeys = {
 		lists: () => [...queryKeys.proxyVisits.all, "list"] as const,
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.proxyVisits.lists(), params] as const,
+		// Single stable key — same rationale as contacts.inbox().
+		inbox: () => [...queryKeys.proxyVisits.all, "inbox"] as const,
 	},
 	auditLogs: {
 		all: ["audit-logs"] as const,

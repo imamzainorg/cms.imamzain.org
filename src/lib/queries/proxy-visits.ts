@@ -16,31 +16,32 @@ type ListParams = {
 }
 
 /**
- * Backend bug: `/forms/proxy-visits` declares `?status=` as a separate
- * `@Query('status')` param, but the global `ValidationPipe` runs with
- * `forbidNonWhitelisted: true` against `PaginationDto`, which doesn't list
- * `status` — so any `?status=...` returns 400 "Validation failed".
- * Workaround: never send `status` to the server; filter client-side.
- * Remove when the API team adds `status` to the relevant DTO.
+ * Backend caveat (mirrors contacts): `/forms/proxy-visits` rejects `?status=`
+ * as non-whitelisted. We fetch the full inbox once and filter / count
+ * client-side. All variants share a single cache entry — previously every
+ * status filter and every count caused a separate identical round-trip.
+ *
+ * `_params` is preserved for backwards-compat but no longer affects the key.
+ * Remove when the API team adds `status` to the DTO whitelist.
  */
-export function useProxyVisitsList(params: ListParams) {
-	const { status: _status, ...safeParams } = params
+export function useProxyVisitsList(_params: ListParams = {}) {
 	return useQuery({
-		queryKey: queryKeys.proxyVisits.list(params),
-		queryFn: async () => (await proxyVisitsService.list(safeParams)).data,
+		queryKey: queryKeys.proxyVisits.inbox(),
+		queryFn: async () => (await proxyVisitsService.list({ limit: 100 })).data,
 		placeholderData: keepPreviousData,
 	})
 }
 
-export function useProxyVisitCount(filter: { status?: Status }) {
-	return useQuery({
-		queryKey: queryKeys.proxyVisits.list({ count: true, ...filter }),
-		queryFn: async () => {
-			const r = await proxyVisitsService.list({ limit: 100 })
-			if (!filter.status) return r.data.pagination.total
-			return r.data.items.filter((v) => v.status === filter.status).length
-		},
-	})
+/**
+ * Count of proxy-visit requests matching a status (or grand total).
+ * Derives from the shared inbox query — no separate round-trip.
+ */
+export function useProxyVisitCount(filter: { status?: Status } = {}) {
+	const inbox = useProxyVisitsList()
+	const count = filter.status
+		? inbox.data?.items.filter((v) => v.status === filter.status).length ?? 0
+		: inbox.data?.pagination.total ?? 0
+	return { ...inbox, data: count }
 }
 
 export function useUpdateProxyVisit() {

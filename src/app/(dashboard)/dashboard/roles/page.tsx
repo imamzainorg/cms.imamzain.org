@@ -5,6 +5,7 @@ import type { Role, Permission } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { Plus, Trash2, Loader2, Shield, Check, Search, Pencil, KeyRound } from "lucide-react"
+import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import Modal from "@/components/ui/Modal"
 import PageHeader from "@/components/layout/PageHeader"
@@ -182,9 +183,9 @@ export default function RolesPage() {
 											<p className="text-xs text-gray-500 mt-1 font-mono truncate">{role.name}</p>
 										</div>
 										<div className="flex flex-col items-end gap-1 shrink-0">
-											<span className="text-[10px] px-1.5 py-0.5 bg-secondary/15 text-secondary rounded-full whitespace-nowrap">
+											<Badge variant="secondary">
 												{(role.permissions?.length ?? 0)} صلاحية
-											</span>
+											</Badge>
 											<div className="flex gap-1.5">
 												<span
 													role="button"

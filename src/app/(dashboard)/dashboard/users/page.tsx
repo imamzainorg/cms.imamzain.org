@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query"
 import type { UserSummary } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
+import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import Modal from "@/components/ui/Modal"
 import PageHeader from "@/components/layout/PageHeader"
@@ -275,10 +276,9 @@ export default function UsersPage() {
 											</div>
 										</td>
 										<td className="px-6 py-3.5">
-											<span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold rounded-full ring-1 ring-inset ${u.is_active ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
-												<span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? "bg-emerald-500" : "bg-red-500"}`} />
+											<Badge variant={u.is_active ? "success" : "error"} dot>
 												{u.is_active ? "نشط" : "معطّل"}
-											</span>
+											</Badge>
 										</td>
 										<td className="px-6 py-3.5 text-sm text-gray-500 tabular-nums">{safeFormat(u.created_at, "dd/MM/yyyy")}</td>
 										<td className="px-6 py-3.5 text-left">

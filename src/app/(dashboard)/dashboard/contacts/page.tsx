@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
 import { buildWebmailComposeUrl } from "@/lib/webmail"
+import Badge from "@/components/ui/Badge"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import {
@@ -27,10 +28,10 @@ const STATUS_LABEL: Record<Contact["status"], string> = {
 	SPAM: "مزعجة",
 }
 
-const STATUS_BADGE: Record<Contact["status"], string> = {
-	NEW: "bg-blue-100 text-blue-800",
-	RESPONDED: "bg-green-100 text-green-800",
-	SPAM: "bg-gray-200 text-gray-700",
+const STATUS_VARIANT: Record<Contact["status"], "info" | "success" | "default"> = {
+	NEW: "info",
+	RESPONDED: "success",
+	SPAM: "default",
 }
 
 /**
@@ -260,8 +261,10 @@ function ContactReadingPane({
 						<span dir="ltr">{contact.email}</span>
 						<span>·</span>
 						<span>{safeFormat(contact.submitted_at ?? contact.created_at, "dd/MM/yyyy HH:mm")}</span>
-						<span className={`mr-2 px-2 py-0.5 text-[10px] rounded-full ${STATUS_BADGE[contact.status]}`}>
-							{STATUS_LABEL[contact.status]}
+						<span className="mr-2">
+							<Badge variant={STATUS_VARIANT[contact.status]} dot>
+								{STATUS_LABEL[contact.status]}
+							</Badge>
 						</span>
 					</div>
 				</div>

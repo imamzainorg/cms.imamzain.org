@@ -29,30 +29,57 @@ export default function MediaPicker({
 	const [loading, setLoading] = useState(false)
 	const [uploading, setUploading] = useState(false)
 	const [search, setSearch] = useState("")
+	const [debouncedSearch, setDebouncedSearch] = useState("")
 	const [page, setPage] = useState(1)
 	const [hasMore, setHasMore] = useState(false)
 	const [selected, setSelected] = useState<MediaRecord | null>(null)
 
-	const load = useCallback(async (p: number, replace: boolean) => {
-		setLoading(true)
-		try {
-			const { data } = await mediaService.list({ page: p, limit: 30 })
-			setMedia((prev) => (replace ? data.items : [...prev, ...data.items]))
-			setHasMore(p < data.pagination.pages)
-		} catch (e) {
-			toast.error(getErrorMessage(e, "فشل تحميل الوسائط"))
-		} finally {
-			setLoading(false)
-		}
-	}, [])
+	// Push search to the server (per API integration notes: trigram indexes
+	// keep `?search=` cheap as the library grows; client-side filtering on a
+	// 30-item page misses everything beyond it). Debounced ≥ 300ms.
+	const load = useCallback(
+		async (p: number, replace: boolean, q: string) => {
+			setLoading(true)
+			try {
+				const { data } = await mediaService.list({
+					page: p,
+					limit: 30,
+					search: q || undefined,
+				})
+				setMedia((prev) => (replace ? data.items : [...prev, ...data.items]))
+				setHasMore(p < data.pagination.pages)
+			} catch (e) {
+				toast.error(getErrorMessage(e, "فشل تحميل الوسائط"))
+			} finally {
+				setLoading(false)
+			}
+		},
+		[],
+	)
 
 	useEffect(() => {
 		if (!open) return
 		setSelected(null)
 		setSearch("")
+		setDebouncedSearch("")
 		setPage(1)
-		load(1, true)
+		load(1, true, "")
 	}, [open, load])
+
+	// Debounce search input, then reset to page 1 and reload.
+	useEffect(() => {
+		if (!open) return
+		const t = setTimeout(() => {
+			setDebouncedSearch(search.trim())
+		}, 300)
+		return () => clearTimeout(t)
+	}, [search, open])
+
+	useEffect(() => {
+		if (!open) return
+		setPage(1)
+		load(1, true, debouncedSearch)
+	}, [debouncedSearch, open, load])
 
 	const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = e.target.files
@@ -69,7 +96,7 @@ export default function MediaPicker({
 				lastUploaded = record
 			}
 			toast.success(`تم رفع ${files.length} ملف${files.length > 1 ? "ات" : ""}`)
-			await load(1, true)
+			await load(1, true, debouncedSearch)
 			setPage(1)
 			if (lastUploaded) setSelected(lastUploaded)
 		} catch (err) {
@@ -93,15 +120,12 @@ export default function MediaPicker({
 		}
 	}
 
-	const filtered = media.filter((m) => {
-		const isImage = m.mime_type?.startsWith("image/")
-		if (accept === "image" && !isImage) return false
-		if (!search) return true
-		return (
-			m.filename.toLowerCase().includes(search.toLowerCase()) ||
-			(m.alt_text || "").toLowerCase().includes(search.toLowerCase())
-		)
-	})
+	// Server handles `search`. We still drop non-image rows client-side because
+	// the API's `mime_type` filter is exact-match (image/jpeg, image/png, ...)
+	// and the picker accepts the whole image/* family.
+	const filtered = accept === "image"
+		? media.filter((m) => m.mime_type?.startsWith("image/"))
+		: media
 
 	if (!open) return null
 
@@ -222,7 +246,7 @@ export default function MediaPicker({
 					{hasMore && !loading && (
 						<div className="flex justify-center mt-6">
 							<button
-								onClick={() => { setPage(page + 1); load(page + 1, false) }}
+								onClick={() => { setPage(page + 1); load(page + 1, false, debouncedSearch) }}
 								className="cursor-pointer px-4 py-1.5 text-sm font-medium text-foreground bg-white border border-[hsl(var(--border-strong))] rounded-md shadow-soft hover:bg-surface-muted transition-colors"
 							>
 								عرض المزيد

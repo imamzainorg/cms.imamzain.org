@@ -16,8 +16,8 @@ export const usersService = {
 	remove: (id: string) => api.delete(`/users/${id}`),
 
 	assignRole: (userId: string, roleId: string) =>
-		api.post(`/users/${userId}/roles`, { role_id: roleId }),
+		api.post<{ message: string }>(`/users/${userId}/roles`, { role_id: roleId }),
 
 	removeRole: (userId: string, roleId: string) =>
-		api.delete(`/users/${userId}/roles/${roleId}`),
+		api.delete<{ message: string }>(`/users/${userId}/roles/${roleId}`),
 }

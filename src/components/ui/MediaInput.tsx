@@ -71,16 +71,16 @@ export default function MediaInput({
 							<button
 								type="button"
 								onClick={() => setOpen(true)}
-								className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+								className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] hover:border-[hsl(var(--primary)/0.6)] transition-colors"
 							>
-								<Pencil className="h-3 w-3" /> تغيير
+								<Pencil className="h-3.5 w-3.5" strokeWidth={1.6} /> تغيير
 							</button>
 							<button
 								type="button"
 								onClick={() => onChange(null)}
-								className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 hover:text-red-700"
+								className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[hsl(var(--danger))] hover:text-[hsl(var(--danger-foreground))] hover:bg-[hsl(var(--danger-soft))] rounded-md transition-colors"
 							>
-								<X className="h-3 w-3" /> إزالة
+								<X className="h-3.5 w-3.5" strokeWidth={1.6} /> إزالة
 							</button>
 						</div>
 					</div>

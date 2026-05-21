@@ -114,28 +114,39 @@ export default function MediaPicker({
 				className="bg-white rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
 				onClick={(e) => e.stopPropagation()}
 			>
-				<div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-					<h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-					<button onClick={onClose} className="p-1 rounded-md hover:bg-gray-100">
-						<X className="h-5 w-5 text-gray-500" />
+				<div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
+					<h2 className="text-lg font-semibold text-foreground">{title}</h2>
+					<button
+						onClick={onClose}
+						aria-label="إغلاق"
+						className="cursor-pointer p-1.5 rounded-md text-[hsl(var(--foreground-subtle))] hover:text-foreground hover:bg-surface-muted transition-colors"
+					>
+						<X className="h-5 w-5" strokeWidth={1.6} />
 					</button>
 				</div>
 
-				<div className="flex flex-wrap gap-3 px-6 py-3 border-b border-gray-100">
+				<div className="flex flex-wrap gap-3 px-6 py-3 border-b border-[hsl(var(--border))]">
 					<div className="relative flex-1 min-w-[200px]">
-						<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+						<Search
+							className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--foreground-subtle))]"
+							strokeWidth={1.6}
+						/>
 						<input
 							type="text"
 							placeholder="ابحث باسم الملف..."
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
-							className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+							className="w-full pr-9 pl-3 py-1.5 text-sm bg-white border border-[hsl(var(--input))] rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
 						/>
 					</div>
 					<label
-						className={`inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90 cursor-pointer ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
+						className={`inline-flex items-center gap-2 px-4 py-1.5 bg-primary text-white text-sm font-medium rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise transition-all cursor-pointer ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
 					>
-						{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+						{uploading ? (
+							<Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} />
+						) : (
+							<Upload className="h-4 w-4" strokeWidth={1.6} />
+						)}
 						{uploading ? "جارٍ الرفع..." : "رفع جديد"}
 						<input
 							type="file"
@@ -180,17 +191,19 @@ export default function MediaPicker({
 											</div>
 										)}
 										{isSel && (
-											<div className="absolute top-1 right-1 bg-primary text-white rounded-full p-1 shadow-md">
-												<Check className="h-3 w-3" />
+											<div className="absolute top-1.5 right-1.5 bg-primary text-white rounded-full p-1 shadow-soft">
+												<Check className="h-3.5 w-3.5" strokeWidth={2} />
 											</div>
 										)}
-										<div
+										<button
+											type="button"
 											onClick={(e) => handleDelete(e, item)}
-											className="absolute top-1 left-1 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 rounded p-1 opacity-0 group-hover:opacity-100 cursor-pointer"
+											aria-label={`حذف ${item.filename}`}
+											className="cursor-pointer absolute top-1.5 left-1.5 bg-white/95 hover:bg-[hsl(var(--danger))] hover:text-white text-[hsl(var(--danger))] rounded-md p-1.5 opacity-0 group-hover:opacity-100 shadow-soft transition-colors"
 											title="حذف"
 										>
-											<Trash2 className="h-3 w-3" />
-										</div>
+											<Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
+										</button>
 										{isImage && (
 											<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent text-white text-[11px] p-1.5 truncate opacity-0 group-hover:opacity-100">
 												{item.filename}
@@ -210,7 +223,7 @@ export default function MediaPicker({
 						<div className="flex justify-center mt-6">
 							<button
 								onClick={() => { setPage(page + 1); load(page + 1, false) }}
-								className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+								className="cursor-pointer px-4 py-1.5 text-sm font-medium text-foreground bg-white border border-[hsl(var(--border-strong))] rounded-md shadow-soft hover:bg-surface-muted transition-colors"
 							>
 								عرض المزيد
 							</button>
@@ -218,23 +231,23 @@ export default function MediaPicker({
 					)}
 				</div>
 
-				<div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-white">
-					<div className="text-sm text-gray-500">
+				<div className="flex items-center justify-between px-6 py-3 border-t border-[hsl(var(--border))] bg-white">
+					<div className="text-sm text-[hsl(var(--foreground-muted))]">
 						{selected
-							? <span>المختار: <span className="font-medium text-gray-900">{selected.filename}</span></span>
+							? <span>المختار: <span className="font-medium text-foreground">{selected.filename}</span></span>
 							: <span>اختر ملفاً (نقر مزدوج للاختيار السريع)</span>}
 					</div>
 					<div className="flex gap-2">
 						<button
 							onClick={onClose}
-							className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
+							className="cursor-pointer px-4 py-1.5 text-sm font-medium text-foreground bg-white border border-[hsl(var(--border-strong))] rounded-md shadow-soft hover:bg-surface-muted transition-colors"
 						>
 							إلغاء
 						</button>
 						<button
 							onClick={() => selected && onSelect(selected)}
 							disabled={!selected}
-							className="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-40"
+							className="cursor-pointer px-4 py-1.5 text-sm font-semibold bg-primary text-white rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 						>
 							اختيار
 						</button>

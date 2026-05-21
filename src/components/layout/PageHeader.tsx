@@ -24,9 +24,9 @@ export default function PageHeader({
 	className = "",
 }: Props) {
 	return (
-		<div className={`bg-white rounded-xl border border-gray-200 px-6 py-5 ${className}`}>
+		<div className={`bg-white rounded-xl border border-[hsl(var(--border))] shadow-soft px-6 py-5 ${className}`}>
 			{breadcrumbs && breadcrumbs.length > 0 && (
-				<nav className="flex items-center gap-1 text-xs text-gray-500 mb-3" aria-label="مسار التنقل">
+				<nav className="flex items-center gap-1 text-xs text-[hsl(var(--foreground-muted))] mb-3" aria-label="مسار التنقل">
 					{breadcrumbs.map((c, i) => (
 						<span key={i} className="flex items-center gap-1">
 							{c.href ? (
@@ -37,7 +37,7 @@ export default function PageHeader({
 								<span>{c.label}</span>
 							)}
 							{i < breadcrumbs.length - 1 && (
-								<ChevronLeft className="h-3 w-3 text-gray-300" />
+								<ChevronLeft className="h-3 w-3 text-[hsl(var(--foreground-subtle))]" strokeWidth={1.6} />
 							)}
 						</span>
 					))}
@@ -47,14 +47,14 @@ export default function PageHeader({
 			<div className="flex flex-wrap items-start justify-between gap-4">
 				<div className="flex items-start gap-3 min-w-0">
 					{Icon && (
-						<div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-							<Icon className="h-5 w-5 text-primary" />
+						<div className="shrink-0 w-10 h-10 rounded-md bg-[hsl(var(--primary)/0.08)] ring-1 ring-[hsl(var(--primary)/0.15)] flex items-center justify-center">
+							<Icon className="h-5 w-5 text-primary" strokeWidth={1.6} />
 						</div>
 					)}
 					<div className="min-w-0">
-						<h1 className="text-xl font-bold text-gray-900 truncate">{title}</h1>
+						<h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
 						{description && (
-							<p className="mt-0.5 text-sm text-gray-500">{description}</p>
+							<p className="mt-0.5 text-sm text-[hsl(var(--foreground-muted))]">{description}</p>
 						)}
 					</div>
 				</div>
@@ -65,7 +65,7 @@ export default function PageHeader({
 			</div>
 
 			{stats && (
-				<div className="mt-4 pt-4 border-t border-gray-100">{stats}</div>
+				<div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">{stats}</div>
 			)}
 		</div>
 	)

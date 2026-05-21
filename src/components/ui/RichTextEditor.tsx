@@ -128,7 +128,7 @@ export default function RichTextEditor({
 	}
 
 	return (
-		<div className={`border rounded-md bg-white focus-within:ring-2 focus-within:ring-primary/30 ${overLimit ? "border-red-400 ring-1 ring-red-200" : "border-gray-300 focus-within:border-primary"}`}>
+		<div className={`border rounded-md bg-white focus-within:ring-2 focus-within:ring-primary/30 transition-all ${overLimit ? "border-[hsl(var(--danger)/0.5)] ring-1 ring-[hsl(var(--danger)/0.15)]" : "border-[hsl(var(--input))] focus-within:border-primary"}`}>
 			<Toolbar
 				editor={editor}
 				onLink={insertLink}
@@ -172,15 +172,15 @@ function EditorFooter({
 		n < 1024 ? `${n} بايت` : `${(n / 1024).toFixed(1)} ك.ب`
 	const pct = Math.min(100, (bytes / maxBytes) * 100)
 	return (
-		<div className="border-t border-gray-100 px-3 py-1.5 flex items-center gap-3 text-[11px] bg-gray-50/40">
-			<div className="flex-1 h-1.5 bg-gray-200 rounded overflow-hidden">
+		<div className="border-t border-[hsl(var(--border))] px-3 py-1.5 flex items-center gap-3 text-[11px] bg-surface-muted/50">
+			<div className="flex-1 h-1.5 bg-[hsl(var(--border))] rounded-full overflow-hidden">
 				<div
-					className={`h-full transition-all ${overLimit ? "bg-red-500" : nearLimit ? "bg-amber-500" : "bg-primary"}`}
+					className={`h-full transition-all ${overLimit ? "bg-[hsl(var(--danger))]" : nearLimit ? "bg-[hsl(var(--warning))]" : "bg-primary"}`}
 					style={{ width: `${pct}%` }}
 				/>
 			</div>
-			<span className={overLimit ? "text-red-600 font-semibold" : nearLimit ? "text-amber-700" : "text-gray-500"}>
-				{overLimit && <AlertTriangle className="inline h-3 w-3 ml-1" />}
+			<span className={`arabic-nums tabular-nums ${overLimit ? "text-[hsl(var(--danger))] font-semibold" : nearLimit ? "text-[hsl(var(--warning-foreground))]" : "text-[hsl(var(--foreground-muted))]"}`}>
+				{overLimit && <AlertTriangle className="inline h-3 w-3 ml-1" strokeWidth={1.6} />}
 				{fmt(bytes)} / {fmt(maxBytes)}
 				{overLimit && " — تجاوز الحد المسموح"}
 			</span>
@@ -211,39 +211,49 @@ function Toolbar({
 			onClick={onClick}
 			disabled={disabled}
 			title={title}
-			className={`p-1.5 rounded hover:bg-gray-100 text-gray-600 disabled:opacity-40 ${active ? "bg-primary/10 text-primary" : ""}`}
+			aria-label={title}
+			aria-pressed={active}
+			className={`cursor-pointer p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+				active
+					? "bg-[hsl(var(--primary)/0.1)] text-primary"
+					: "text-[hsl(var(--foreground-muted))] hover:text-primary hover:bg-[hsl(var(--primary)/0.06)]"
+			}`}
 		>
 			{children}
 		</button>
 	)
 
-	const Sep = () => <div className="w-px h-5 bg-gray-200 mx-1" />
+	const Sep = () => <div className="w-px h-5 bg-[hsl(var(--border))] mx-0.5" aria-hidden />
+
+	// All toolbar icons share these props — sized at 16px with 1.6 stroke so
+	// they read at the same visual weight as the rest of the chrome iconography.
+	const I = { className: "h-4 w-4", strokeWidth: 1.6 as const }
 
 	return (
-		<div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-gray-50/60 rounded-t-md">
-			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="عنوان كبير"><Heading1 className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="عنوان متوسط"><Heading2 className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} title="عنوان صغير"><Heading3 className="h-4 w-4" /></Btn>
+		<div className="flex flex-wrap items-center gap-1 px-2.5 py-2 border-b border-[hsl(var(--border))] bg-surface-muted/60 rounded-t-md">
+			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="عنوان كبير"><Heading1 {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="عنوان متوسط"><Heading2 {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} title="عنوان صغير"><Heading3 {...I} /></Btn>
 			<Sep />
-			<Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="غامق"><Bold className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="مائل"><Italic className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="مسطّر"><UnderlineIcon className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="كود مضمّن"><Code className="h-4 w-4" /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="غامق"><Bold {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="مائل"><Italic {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="مسطّر"><UnderlineIcon {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="كود مضمّن"><Code {...I} /></Btn>
 			<Sep />
-			<Btn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="قائمة نقطية"><List className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="قائمة مرقّمة"><ListOrdered className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} title="اقتباس"><Quote className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="خط فاصل"><Minus className="h-4 w-4" /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="قائمة نقطية"><List {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="قائمة مرقّمة"><ListOrdered {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} title="اقتباس"><Quote {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="خط فاصل"><Minus {...I} /></Btn>
 			<Sep />
-			<Btn onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} title="محاذاة لليمين"><AlignRight className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} title="توسيط"><AlignCenter className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} title="محاذاة لليسار"><AlignLeft className="h-4 w-4" /></Btn>
+			<Btn onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} title="محاذاة لليمين"><AlignRight {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} title="توسيط"><AlignCenter {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} title="محاذاة لليسار"><AlignLeft {...I} /></Btn>
 			<Sep />
-			<Btn onClick={onLink} active={editor.isActive("link")} title="رابط"><LinkIcon className="h-4 w-4" /></Btn>
-			<Btn onClick={onImage} title="صورة"><ImageIcon className="h-4 w-4" /></Btn>
+			<Btn onClick={onLink} active={editor.isActive("link")} title="رابط"><LinkIcon {...I} /></Btn>
+			<Btn onClick={onImage} title="صورة"><ImageIcon {...I} /></Btn>
 			<Sep />
-			<Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="تراجع"><Undo className="h-4 w-4" /></Btn>
-			<Btn onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="إعادة"><Redo className="h-4 w-4" /></Btn>
+			<Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="تراجع"><Undo {...I} /></Btn>
+			<Btn onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="إعادة"><Redo {...I} /></Btn>
 		</div>
 	)
 }

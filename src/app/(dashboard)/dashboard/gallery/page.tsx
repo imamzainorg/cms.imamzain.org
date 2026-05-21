@@ -4,7 +4,7 @@ import { useState, useCallback } from "react"
 import type { GalleryImage, GalleryCategory } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { categoryName } from "@/lib/i18n"
+import { categoryName, pickTranslation } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag } from "lucide-react"
 import { safeFormat } from "@/lib/dates"
@@ -71,10 +71,7 @@ export default function GalleryPage() {
 	}
 
 	const getTitle = (img: GalleryImage) =>
-		img.translation?.title ||
-		(img.gallery_image_translations ?? []).find((t) => t.lang === "ar")?.title ||
-		(img.gallery_image_translations ?? [])[0]?.title ||
-		""
+		pickTranslation(img.gallery_image_translations, img.translation)?.title || ""
 
 	const filtered = images.filter((img) => {
 		const title = getTitle(img).toLowerCase()

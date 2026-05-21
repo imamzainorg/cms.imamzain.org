@@ -18,6 +18,7 @@ import {
 import Link from "next/link"
 import Image from "next/image"
 import { safeFormat, formatArNumber, toArabicDigits } from "@/lib/dates"
+import { pickTranslation } from "@/lib/i18n"
 import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import { StatGridSkeleton, Skeleton, ListSkeleton } from "@/components/ui/Skeleton"
@@ -80,10 +81,7 @@ export default function DashboardPage() {
 	})()
 
 	const titleOf = (p: Post) =>
-		p.translation?.title ||
-		p.post_translations?.find((t) => t.is_default)?.title ||
-		p.post_translations?.[0]?.title ||
-		"بدون عنوان"
+		pickTranslation(p.post_translations, p.translation)?.title || "بدون عنوان"
 
 	const contentStats = [
 		{ label: "المقالات", value: stats?.posts.total ?? 0, icon: FileText, href: "/dashboard/posts" },

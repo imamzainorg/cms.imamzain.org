@@ -15,40 +15,52 @@ interface BadgeProps {
 	dot?: boolean
 }
 
+/**
+ * Tonal pills using brand-adjacent semantic tokens, not raw Tailwind hues.
+ * The dot variant is for status indicators in tables and lists; the bigger
+ * `md` size is for prominent status labels (sized so icon + label both
+ * read distinctly — single-pill scan should not require a second glance).
+ */
 const variants: Record<Variant, { surface: string; dot: string }> = {
 	default: {
-		surface: "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200",
-		dot: "bg-gray-400",
+		surface:
+			"bg-[hsl(var(--surface-muted))] text-[hsl(var(--foreground-muted))] ring-1 ring-inset ring-[hsl(var(--border))]",
+		dot: "bg-[hsl(var(--foreground-subtle))]",
 	},
 	primary: {
-		surface: "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
+		surface:
+			"bg-[hsl(var(--primary-soft))] text-[hsl(var(--accent-foreground))] ring-1 ring-inset ring-[hsl(var(--primary)/0.2)]",
 		dot: "bg-primary",
 	},
 	secondary: {
 		surface:
-			"bg-secondary/15 text-[hsl(35_55%_30%)] ring-1 ring-inset ring-secondary/30",
+			"bg-[hsl(var(--secondary-soft))] text-[hsl(var(--secondary-strong))] ring-1 ring-inset ring-[hsl(var(--secondary)/0.3)]",
 		dot: "bg-secondary",
 	},
 	success: {
 		surface:
-			"bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-		dot: "bg-emerald-500",
+			"bg-[hsl(var(--success-soft))] text-[hsl(var(--success-foreground))] ring-1 ring-inset ring-[hsl(var(--success)/0.25)]",
+		dot: "bg-[hsl(var(--success))]",
 	},
 	warning: {
-		surface: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200",
-		dot: "bg-amber-500",
+		surface:
+			"bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning-foreground))] ring-1 ring-inset ring-[hsl(var(--warning)/0.3)]",
+		dot: "bg-[hsl(var(--warning))]",
 	},
 	error: {
-		surface: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200",
-		dot: "bg-red-500",
+		surface:
+			"bg-[hsl(var(--danger-soft))] text-[hsl(var(--danger-foreground))] ring-1 ring-inset ring-[hsl(var(--danger)/0.25)]",
+		dot: "bg-[hsl(var(--danger))]",
 	},
 	info: {
-		surface: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200",
-		dot: "bg-blue-500",
+		surface:
+			"bg-[hsl(var(--info-soft))] text-[hsl(var(--info-foreground))] ring-1 ring-inset ring-[hsl(var(--info)/0.25)]",
+		dot: "bg-[hsl(var(--info))]",
 	},
 	outline: {
-		surface: "bg-transparent text-gray-700 ring-1 ring-inset ring-gray-300",
-		dot: "bg-gray-400",
+		surface:
+			"bg-transparent text-[hsl(var(--foreground-muted))] ring-1 ring-inset ring-[hsl(var(--border-strong))]",
+		dot: "bg-[hsl(var(--foreground-subtle))]",
 	},
 }
 
@@ -60,7 +72,7 @@ export default function Badge({
 }: BadgeProps) {
 	const sizes = {
 		sm: "px-2 py-0.5 text-[11px] gap-1",
-		md: "px-2.5 py-1 text-xs gap-1.5",
+		md: "px-3 py-1 text-[13px] gap-1.5",
 	}
 	const cfg = variants[variant]
 	return (

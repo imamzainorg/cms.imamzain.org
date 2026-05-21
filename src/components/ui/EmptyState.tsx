@@ -12,6 +12,11 @@ type Props = {
 	className?: string
 }
 
+/**
+ * EmptyState — a quiet, branded panel. The icon sits in a soft emerald
+ * disc inside a faint geometric-ornament background, signaling
+ * institutional context without shouting.
+ */
 export default function EmptyState({
 	icon: Icon = Inbox,
 	title,
@@ -22,25 +27,32 @@ export default function EmptyState({
 	className = "",
 }: Props) {
 	const content = (
-		<div className={`text-center py-12 px-6 ${className}`}>
-			<div className="mx-auto w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
-				<Icon className="h-8 w-8 text-primary/60" />
-			</div>
-			<h3 className="text-base font-semibold text-gray-900 mb-1">{title}</h3>
-			{description && (
-				<p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">{description}</p>
-			)}
-			{(action || secondaryAction) && (
-				<div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
-					{action}
-					{secondaryAction}
+		<div className={`relative overflow-hidden text-center py-14 px-6 ${className}`}>
+			<div
+				className="absolute inset-0 ornament-tile pointer-events-none"
+				style={{ opacity: 0.04 }}
+				aria-hidden
+			/>
+			<div className="relative">
+				<div className="mx-auto w-16 h-16 rounded-full bg-[hsl(var(--primary)/0.06)] flex items-center justify-center mb-4 ring-1 ring-[hsl(var(--primary)/0.12)]">
+					<Icon className="h-7 w-7 text-primary/70" strokeWidth={1.4} />
 				</div>
-			)}
+				<h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
+				{description && (
+					<p className="text-sm text-[hsl(var(--foreground-muted))] max-w-sm mx-auto leading-relaxed">{description}</p>
+				)}
+				{(action || secondaryAction) && (
+					<div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+						{action}
+						{secondaryAction}
+					</div>
+				)}
+			</div>
 		</div>
 	)
 
 	if (variant === "card") {
-		return <div className="bg-white rounded-xl border border-gray-200">{content}</div>
+		return <div className="bg-white rounded-lg border border-[hsl(var(--border))] shadow-soft">{content}</div>
 	}
 
 	return content

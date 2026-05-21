@@ -18,6 +18,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	rightIcon?: React.ReactNode
 }
 
+/**
+ * Button — tonal variants drive from the brand palette + semantic tokens.
+ * Gold (secondaryBrand) is reserved for premium/featured CTAs — never as a
+ * generic fill. Loading state replaces both icons with a spinner.
+ */
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 	(
 		{
@@ -38,19 +43,19 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
 		const variants: Record<Variant, string> = {
 			primary:
-				"bg-primary text-white shadow-soft hover:bg-primary/92 hover:shadow-raise focus-visible:ring-primary",
+				"bg-primary text-white shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise focus-visible:ring-primary",
 			secondary:
-				"bg-white text-gray-700 border border-gray-300 shadow-soft hover:bg-gray-50 hover:border-gray-400 focus-visible:ring-gray-400",
+				"bg-white text-foreground border border-[hsl(var(--border-strong))] shadow-soft hover:bg-surface-muted hover:border-[hsl(var(--border-strong))] focus-visible:ring-[hsl(var(--border-strong))]",
 			secondaryBrand:
-				"bg-secondary text-white shadow-soft hover:bg-secondary/92 hover:shadow-raise focus-visible:ring-secondary",
+				"bg-secondary text-white shadow-soft hover:bg-[hsl(var(--secondary)/0.92)] hover:shadow-raise focus-visible:ring-secondary",
 			outline:
-				"bg-transparent text-primary border border-primary/30 hover:bg-primary/5 hover:border-primary/60 focus-visible:ring-primary",
+				"bg-transparent text-primary border border-[hsl(var(--primary)/0.3)] hover:bg-[hsl(var(--primary)/0.06)] hover:border-[hsl(var(--primary)/0.6)] focus-visible:ring-primary",
 			soft:
-				"bg-primary/10 text-primary hover:bg-primary/15 focus-visible:ring-primary/60",
+				"bg-accent text-[hsl(var(--accent-foreground))] hover:bg-[hsl(var(--accent)/0.7)] focus-visible:ring-[hsl(var(--primary)/0.6)]",
 			danger:
-				"bg-red-600 text-white shadow-soft hover:bg-red-700 hover:shadow-raise focus-visible:ring-red-500",
+				"bg-[hsl(var(--danger))] text-white shadow-soft hover:bg-[hsl(var(--danger-foreground))] hover:shadow-raise focus-visible:ring-[hsl(var(--danger))]",
 			ghost:
-				"bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-gray-400",
+				"bg-transparent text-foreground hover:bg-surface-muted hover:text-foreground focus-visible:ring-[hsl(var(--border-strong))]",
 		}
 
 		const sizes = {
@@ -66,7 +71,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 				disabled={isLoading || disabled}
 				{...props}
 			>
-				{isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+				{isLoading && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} />}
 				{!isLoading && leftIcon}
 				{children}
 				{!isLoading && rightIcon}

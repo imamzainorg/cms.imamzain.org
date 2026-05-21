@@ -9,8 +9,6 @@ export const api = axios.create({
 	},
 })
 
-// Tokens are kept in localStorage. XSS-exfiltratable — a future hardening
-// pass should move both to httpOnly cookies via a Next route-handler proxy.
 const ACCESS_TOKEN_KEY = "accessToken"
 const REFRESH_TOKEN_KEY = "refreshToken"
 
@@ -31,6 +29,18 @@ export function setRefreshToken(token: string | null) {
 	else localStorage.removeItem(REFRESH_TOKEN_KEY)
 }
 
+/**
+ * Handler invoked when the session is over and the user must re-authenticate
+ * (refresh token rejected or wiped). Registered by the app shell so the api
+ * module doesn't touch `window.location` directly — keeps tests free of
+ * jsdom navigation errors and lets the redirect mechanism evolve without
+ * changing this file.
+ */
+let authFailureHandler: (() => void) | null = null
+export function setAuthFailureHandler(h: (() => void) | null) {
+	authFailureHandler = h
+}
+
 api.interceptors.request.use((config) => {
 	if (typeof window !== "undefined") {
 		const token = localStorage.getItem(ACCESS_TOKEN_KEY)
@@ -46,45 +56,48 @@ api.interceptors.request.use((config) => {
 	return config
 })
 
-// --- Refresh-token rotation ---
-// One refresh attempt at a time. If a 401 arrives while a refresh is already
-// in flight, queue the original request and replay it once the new access
-// token lands.
+// ============================================================================
+// Refresh-token rotation
+// ============================================================================
+// One refresh attempt at a time. Concurrent 401s queue waiters and replay with
+// the new access token once the refresh resolves. The waiter Promise resolves
+// directly with the token (or null on failure) — no shared mutable state to
+// race against.
 
 let refreshInflight: Promise<string | null> | null = null
-const refreshQueue: Array<() => void> = []
+const refreshWaiters: Array<(token: string | null) => void> = []
 
 async function attemptRefresh(): Promise<string | null> {
 	const refreshToken = getRefreshToken()
 	if (!refreshToken) {
-		// No refresh token to use → access token is dead; clear it so the next
-		// request short-circuits to login instead of looping 401s.
+		// No refresh token → access token is dead; clear it so the next request
+		// short-circuits to login instead of looping 401s.
 		setAccessToken(null)
 		return null
 	}
 	try {
-		// Bare axios — bypasses our interceptors so we don't recurse.
+		// Bare axios — bypasses our interceptors so we don't recurse on 401.
 		const resp = await axios.post<{
 			success?: boolean
 			data?: { accessToken: string; refresh_token: string }
-			accessToken?: string
-			refresh_token?: string
 		}>(
 			`${API_URL}/auth/refresh`,
 			{ refresh_token: refreshToken },
 			{ headers: { "Content-Type": "application/json" } },
 		)
-		const enveloped = resp.data?.data
-		const data = enveloped ?? (resp.data as { accessToken: string; refresh_token: string })
+		const data = resp.data?.data
 		if (!data?.accessToken || !data?.refresh_token) return null
 		setAccessToken(data.accessToken)
 		setRefreshToken(data.refresh_token)
 		return data.accessToken
-	} catch {
-		// Reuse-detection or unknown-token cases come back as 401 → wipe both
-		// tokens so the next request bounces to login.
-		setAccessToken(null)
-		setRefreshToken(null)
+	} catch (e) {
+		// 401 here = invalid / reused refresh token → session is over, wipe both.
+		// Network / 5xx during refresh = transient → keep tokens so the next
+		// attempt can recover; we just fail THIS request.
+		if (axios.isAxiosError(e) && e.response?.status === 401) {
+			setAccessToken(null)
+			setRefreshToken(null)
+		}
 		return null
 	}
 }
@@ -109,12 +122,10 @@ api.interceptors.response.use(
 		const url = config?.url ?? ""
 		const isAuthEndpoint = url.includes("/auth/refresh") || url.includes("/auth/login")
 
+		// Only intercept 401s on non-auth endpoints that haven't been retried yet.
+		// Auth-endpoint failures bubble up to the caller (login form, refresh path)
+		// and already-retried requests would otherwise loop.
 		if (error.response?.status !== 401 || !config || config._retried || isAuthEndpoint) {
-			if (error.response?.status === 401 && isAuthEndpoint && typeof window !== "undefined") {
-				setAccessToken(null)
-				setRefreshToken(null)
-				try { window.location.href = "/login" } catch { /* jsdom */ }
-			}
 			return Promise.reject(error)
 		}
 
@@ -122,21 +133,23 @@ api.interceptors.response.use(
 
 		if (!refreshInflight) {
 			refreshInflight = attemptRefresh().finally(() => {
-				const drain = refreshQueue.splice(0)
+				const waiters = refreshWaiters.splice(0)
+				const token = getAccessToken()
 				refreshInflight = null
-				drain.forEach((cb) => cb())
+				waiters.forEach((cb) => cb(token))
 			})
 		}
 
 		const newToken = await new Promise<string | null>((resolve) => {
-			refreshQueue.push(() => resolve(getAccessToken()))
-			void refreshInflight
+			refreshWaiters.push(resolve)
 		})
 
 		if (!newToken) {
-			if (typeof window !== "undefined") {
-				try { window.location.href = "/login" } catch { /* jsdom */ }
-			}
+			// Refresh failed. If the access token is also gone, attemptRefresh
+			// decided the session is over (401 on refresh) — fire the handler.
+			// If the token is still present, it was a transient network/5xx and
+			// we leave the session intact so the user can retry.
+			if (!getAccessToken()) authFailureHandler?.()
 			return Promise.reject(error)
 		}
 

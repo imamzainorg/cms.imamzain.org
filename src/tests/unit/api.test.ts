@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest"
 import { setupServer } from "msw/node"
 import { http, HttpResponse } from "msw"
 import axios from "axios"
@@ -48,16 +48,16 @@ describe("api interceptor", () => {
 		expect(captured).toBeNull()
 	})
 
-	it("clears the token on 401 (and attempts redirect to /login)", async () => {
+	it("clears the access token on 401 when no refresh token is available", async () => {
 		localStorage.setItem("accessToken", "expired")
+		// No refresh token set → attemptRefresh short-circuits to null and
+		// wipes the access token. The session-end handler is registered by
+		// QueryProvider in real app boot; in this isolated test it stays
+		// unregistered, so no navigation is attempted.
 		server.use(http.get(`${API}/secret`, () =>
 			HttpResponse.json({ success: false, message: "Unauthorized" }, { status: 401 }),
 		))
-		// jsdom doesn't implement navigation — the interceptor swallows the resulting
-		// error in try/catch; we only assert the token cleanup observably happened.
-		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 		await expect(api.get("/secret")).rejects.toThrow()
-		errSpy.mockRestore()
 		expect(localStorage.getItem("accessToken")).toBeNull()
 	})
 })

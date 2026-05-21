@@ -60,8 +60,19 @@ export function makeResourceQueries<
 	keys: ResourceKeys
 	/** Defaults for `useList` when the caller passes nothing. Optional. */
 	defaultListParams?: TListParams
+	/**
+	 * Invalidation scope on mutations.
+	 * - `"lists"` (default) — invalidate `keys.lists()` on create/remove
+	 *   and `keys.lists()` + `keys.detail(id)` on update. Right for most
+	 *   resources where extra-list queries don't share cache.
+	 * - `"all"` — invalidate the whole `keys.all` branch on every
+	 *   mutation. Use when the resource has sibling queries (today, pins,
+	 *   stats) that should refresh together with lists.
+	 */
+	invalidate?: "lists" | "all"
 }) {
-	const { service, keys, defaultListParams } = opts
+	const { service, keys, defaultListParams, invalidate = "lists" } = opts
+	const listsKey = invalidate === "all" ? keys.all : keys.lists()
 
 	function useList(params: TListParams = (defaultListParams ?? {}) as TListParams) {
 		return useQuery({
@@ -87,7 +98,7 @@ export function makeResourceQueries<
 		return useMutation({
 			mutationFn: (body: TCreate) => service.create(body),
 			onSuccess: () => {
-				qc.invalidateQueries({ queryKey: keys.lists() })
+				qc.invalidateQueries({ queryKey: listsKey })
 			},
 		})
 	}
@@ -98,8 +109,10 @@ export function makeResourceQueries<
 			mutationFn: ({ id, body }: { id: string; body: TUpdate }) =>
 				service.update(id, body),
 			onSuccess: (_data, { id }) => {
-				qc.invalidateQueries({ queryKey: keys.lists() })
-				if (keys.detail) qc.invalidateQueries({ queryKey: keys.detail(id) })
+				qc.invalidateQueries({ queryKey: listsKey })
+				if (invalidate !== "all" && keys.detail) {
+					qc.invalidateQueries({ queryKey: keys.detail(id) })
+				}
 			},
 		})
 	}
@@ -109,7 +122,7 @@ export function makeResourceQueries<
 		return useMutation({
 			mutationFn: (id: string) => service.remove(id),
 			onSuccess: () => {
-				qc.invalidateQueries({ queryKey: keys.lists() })
+				qc.invalidateQueries({ queryKey: listsKey })
 			},
 		})
 	}

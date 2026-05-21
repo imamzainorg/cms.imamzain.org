@@ -2,31 +2,40 @@ import {
 	useMutation,
 	useQuery,
 	useQueryClient,
-	keepPreviousData,
 } from "@tanstack/react-query"
 import { dailyHadithsService } from "@/services/daily-hadiths.service"
 import { queryKeys } from "./keys"
+import { makeResourceQueries } from "./factory"
+import type { DailyHadith, PaginatedResponse } from "@/types"
 
 type ListParams = { page?: number; limit?: number }
-
 type CreateBody = Parameters<typeof dailyHadithsService.create>[0]
 type UpdateBody = Parameters<typeof dailyHadithsService.update>[1]
 
-export function useDailyHadithsList(params: ListParams = {}) {
-	return useQuery({
-		queryKey: queryKeys.dailyHadiths.list(params),
-		queryFn: async () => (await dailyHadithsService.list(params)).data,
-		placeholderData: keepPreviousData,
-	})
-}
+// The "core 5" come from the factory. We use invalidate: "all" so that
+// every mutation also refreshes the sibling /today and /pins queries —
+// rotating a hadith out of the list can change what /today returns,
+// so the list-only invalidation default would leave them stale.
+const queries = makeResourceQueries<
+	DailyHadith,
+	PaginatedResponse<DailyHadith>,
+	CreateBody,
+	UpdateBody,
+	ListParams
+>({
+	service: dailyHadithsService,
+	keys: queryKeys.dailyHadiths,
+	invalidate: "all",
+})
 
-export function useDailyHadith(id: string | undefined) {
-	return useQuery({
-		queryKey: queryKeys.dailyHadiths.detail(id ?? ""),
-		queryFn: async () => (await dailyHadithsService.get(id!)).data,
-		enabled: !!id,
-	})
-}
+export const useDailyHadithsList = queries.useList
+export const useDailyHadith = queries.useOne
+export const useCreateHadith = queries.useCreate
+export const useUpdateHadith = queries.useUpdate
+export const useDeleteHadith = queries.useRemove
+
+// Non-CRUD hooks — kept hand-rolled because they have shape the factory
+// doesn't support (no `id` param, distinct return types, dedicated keys).
 
 export function useTodayHadith() {
 	return useQuery({
@@ -39,31 +48,6 @@ export function useHadithPins() {
 	return useQuery({
 		queryKey: queryKeys.dailyHadiths.pins(),
 		queryFn: async () => (await dailyHadithsService.listPins()).data,
-	})
-}
-
-export function useCreateHadith() {
-	const qc = useQueryClient()
-	return useMutation({
-		mutationFn: (body: CreateBody) => dailyHadithsService.create(body),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.dailyHadiths.all }),
-	})
-}
-
-export function useUpdateHadith() {
-	const qc = useQueryClient()
-	return useMutation({
-		mutationFn: ({ id, body }: { id: string; body: UpdateBody }) =>
-			dailyHadithsService.update(id, body),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.dailyHadiths.all }),
-	})
-}
-
-export function useDeleteHadith() {
-	const qc = useQueryClient()
-	return useMutation({
-		mutationFn: (id: string) => dailyHadithsService.remove(id),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.dailyHadiths.all }),
 	})
 }
 

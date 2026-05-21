@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { api, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken } from "@/lib/api"
+import { setAccessToken, setRefreshToken, getAccessToken, getRefreshToken } from "@/lib/api"
 import type { AdminUser } from "@/types"
 import { authService } from "@/services/auth.service"
 
@@ -16,30 +16,16 @@ export const useAuthStore = create<AuthStore>((set) => ({
 	isLoading: true,
 
 	login: async (username: string, password: string) => {
-		// api.ts interceptor unwraps the envelope, so `data` is the payload.
-		const { data } = await api.post("/auth/login", { username, password })
-
-		// API spec returns `{ accessToken, refresh_token, user }`. Some older shapes
-		// used `access_token` / `token` / `jwt` — accept any of them for forwards-compat.
-		const accessToken =
-			data.accessToken ??
-			data.access_token ??
-			data.token ??
-			data.jwt
-		const refreshToken =
-			data.refresh_token ??
-			data.refreshToken ??
-			null
-
-		if (!accessToken) {
-			throw new Error(
-				`No access token in response. Got keys: ${Object.keys(data ?? {}).join(", ")}`,
-			)
-		}
-
-		setAccessToken(String(accessToken))
-		if (refreshToken) setRefreshToken(String(refreshToken))
-		set({ user: data.user ?? null, isLoading: false })
+		// authService.login returns LoginResponse via the typed wrapper; the
+		// api interceptor unwraps the envelope so `data` IS the payload.
+		const { data } = await authService.login(username, password)
+		setAccessToken(data.accessToken)
+		setRefreshToken(data.refresh_token)
+		// LoginResponse.user omits `created_at` (and any future MeUser fields).
+		// Fetch /auth/me right after so the store always holds the full record
+		// that downstream pages (profile, audit-logs) expect.
+		const me = await authService.me()
+		set({ user: me.data, isLoading: false })
 	},
 
 	logout: async () => {
@@ -63,9 +49,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
 			return
 		}
 		try {
-			// /auth/me returns the user object directly (after envelope unwrap).
+			// authService.me returns the user object directly (after envelope unwrap).
 			// The api interceptor handles 401 + refresh automatically.
-			const { data } = await api.get("/auth/me")
+			const { data } = await authService.me()
 			set({ user: data, isLoading: false })
 		} catch {
 			setAccessToken(null)

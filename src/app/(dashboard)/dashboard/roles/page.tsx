@@ -185,24 +185,28 @@ export default function RolesPage() {
 											<span className="text-[10px] px-1.5 py-0.5 bg-secondary/15 text-secondary rounded-full whitespace-nowrap">
 												{(role.permissions?.length ?? 0)} صلاحية
 											</span>
-											<div className="flex gap-1">
+											<div className="flex gap-1.5">
 												<span
 													role="button"
 													tabIndex={0}
+													aria-label="تعديل الدور"
+													title="تعديل"
 													onClick={(e) => { e.stopPropagation(); setEditing(role) }}
 													onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setEditing(role) } }}
-													className="p-1 text-gray-400 hover:text-primary"
+													className="cursor-pointer p-1.5 rounded-md inline-flex items-center justify-center text-[hsl(var(--foreground-muted))] hover:text-primary hover:bg-[hsl(var(--primary)/0.08)] transition-colors"
 												>
-													<Pencil className="h-3.5 w-3.5" />
+													<Pencil className="h-4 w-4" strokeWidth={1.6} />
 												</span>
 												<span
 													role="button"
 													tabIndex={0}
+													aria-label="حذف الدور"
+													title="حذف"
 													onClick={(e) => { e.stopPropagation(); handleDelete(role) }}
 													onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleDelete(role) } }}
-													className="p-1 text-gray-400 hover:text-red-600 cursor-pointer"
+													className="cursor-pointer p-1.5 rounded-md inline-flex items-center justify-center text-[hsl(var(--danger))] hover:bg-[hsl(var(--danger-soft))] transition-colors"
 												>
-													<Trash2 className="h-3.5 w-3.5" />
+													<Trash2 className="h-4 w-4" strokeWidth={1.6} />
 												</span>
 											</div>
 										</div>

@@ -282,11 +282,11 @@ export default function UsersPage() {
 										</td>
 										<td className="px-6 py-3.5 text-sm text-gray-500 tabular-nums">{u.created_at ? format(new Date(u.created_at), "dd/MM/yyyy") : "—"}</td>
 										<td className="px-6 py-3.5 text-left">
-											<div className="flex items-center justify-end gap-0.5">
-												<button onClick={(e) => { e.stopPropagation(); toggleActive(u) }} className="cursor-pointer p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors" title={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"}><Power className="h-4 w-4" /></button>
-												<button onClick={(e) => { e.stopPropagation(); setResettingUser(u); setNewPassword("") }} className="cursor-pointer p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="تعيين كلمة مرور جديدة"><KeyRound className="h-4 w-4" /></button>
-												<button onClick={(e) => { e.stopPropagation(); startEdit(u) }} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="تعديل"><Pencil className="h-4 w-4" /></button>
-												<button onClick={(e) => { e.stopPropagation(); handleDelete(u) }} className="cursor-pointer p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="حذف"><Trash2 className="h-4 w-4" /></button>
+											<div className="flex items-center justify-end gap-1.5">
+												<button onClick={(e) => { e.stopPropagation(); toggleActive(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning-soft))]" title={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"} aria-label={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"}><Power className="h-4 w-4" strokeWidth={1.6} /></button>
+												<button onClick={(e) => { e.stopPropagation(); setResettingUser(u); setNewPassword("") }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--info-foreground))] hover:bg-[hsl(var(--info-soft))]" title="تعيين كلمة مرور جديدة" aria-label="تعيين كلمة مرور جديدة"><KeyRound className="h-4 w-4" strokeWidth={1.6} /></button>
+												<button onClick={(e) => { e.stopPropagation(); startEdit(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-primary hover:bg-[hsl(var(--primary)/0.08)]" title="تعديل" aria-label="تعديل"><Pencil className="h-4 w-4" strokeWidth={1.6} /></button>
+												<button onClick={(e) => { e.stopPropagation(); handleDelete(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--danger))] hover:bg-[hsl(var(--danger-soft))]" title="حذف" aria-label="حذف"><Trash2 className="h-4 w-4" strokeWidth={1.6} /></button>
 											</div>
 										</td>
 									</tr>

@@ -4,10 +4,11 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Book } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit, Trash2, Eye, BookOpen, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, BookOpen, Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import EmptyState from "@/components/ui/EmptyState"
+import IconButton from "@/components/ui/IconButton"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { CardGridSkeleton } from "@/components/ui/Skeleton"
@@ -147,9 +148,18 @@ export default function BooksPage() {
 										{authorOf(book) && <p className="text-xs text-gray-500 truncate mt-0.5">{authorOf(book)}</p>}
 									</div>
 								</button>
-								<div className="mt-1.5 px-1 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-									<button onClick={() => router.push(`/dashboard/books/${book.id}`)} className="cursor-pointer p-1 text-gray-400 hover:text-primary" title="تعديل"><Edit className="h-3.5 w-3.5" /></button>
-									<button onClick={() => handleDelete(book)} className="cursor-pointer p-1 text-gray-400 hover:text-red-600" title="حذف"><Trash2 className="h-3.5 w-3.5" /></button>
+								<div className="mt-1.5 px-1 flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+									<IconButton
+										onClick={() => router.push(`/dashboard/books/${book.id}`)}
+										label="تعديل"
+										icon={<Edit2 className="h-4 w-4" strokeWidth={1.6} />}
+									/>
+									<IconButton
+										onClick={() => handleDelete(book)}
+										label="حذف"
+										tone="danger"
+										icon={<Trash2 className="h-4 w-4" strokeWidth={1.6} />}
+									/>
 								</div>
 							</div>
 						)

@@ -265,14 +265,14 @@ function ContactReadingPane({
 						</span>
 					</div>
 				</div>
-				<div className="flex items-center gap-1 shrink-0">
+				<div className="flex items-center gap-2 shrink-0">
 					{contact.status !== "RESPONDED" && (
-						<button onClick={() => onStatus("RESPONDED")} className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-md" title="تحديد كَ تم الرد"><Archive className="h-4 w-4" /></button>
+						<button onClick={() => onStatus("RESPONDED")} className="cursor-pointer p-2 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success-soft))]" title="تحديد كَ تم الرد" aria-label="تحديد كَ تم الرد"><Archive className="h-4 w-4" strokeWidth={1.6} /></button>
 					)}
 					{contact.status !== "SPAM" && (
-						<button onClick={() => onStatus("SPAM")} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md" title="تحديد كَ مزعجة"><ShieldAlert className="h-4 w-4" /></button>
+						<button onClick={() => onStatus("SPAM")} className="cursor-pointer p-2 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--danger))] hover:bg-[hsl(var(--danger-soft))]" title="تحديد كَ مزعجة" aria-label="تحديد كَ مزعجة"><ShieldAlert className="h-4 w-4" strokeWidth={1.6} /></button>
 					)}
-					<button onClick={onDelete} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md" title="حذف"><Trash2 className="h-4 w-4" /></button>
+					<button onClick={onDelete} className="cursor-pointer p-2 rounded-md transition-colors text-[hsl(var(--danger))] hover:bg-[hsl(var(--danger-soft))]" title="حذف" aria-label="حذف"><Trash2 className="h-4 w-4" strokeWidth={1.6} /></button>
 				</div>
 			</div>
 

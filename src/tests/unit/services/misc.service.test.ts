@@ -137,16 +137,6 @@ describe("newsletterService", () => {
 		expect(called).toBe(true)
 	})
 
-	it("subscribe POSTs to /newsletter/subscribe with email", async () => {
-		let body: unknown = null
-		server.use(http.post(`${API}/newsletter/subscribe`, async ({ request }) => {
-			body = await request.json()
-			return HttpResponse.json(wrap({}))
-		}))
-		await newsletterService.subscribe("a@b.com")
-		expect(body).toEqual({ email: "a@b.com" })
-	})
-
 	it("unsubscribeById POSTs to /newsletter/subscribers/:id/unsubscribe", async () => {
 		let captured = ""
 		server.use(http.post(`${API}/newsletter/subscribers/:id/unsubscribe`, ({ params }) => {

@@ -15,5 +15,4 @@ export {
 	ListSkeleton,
 	CardGridSkeleton,
 	StatGridSkeleton,
-	DetailSkeleton,
 } from "./Skeleton"

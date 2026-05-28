@@ -1,39 +1,34 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Book } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit2, Trash2, Eye, BookOpen, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, BookOpen, Search } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import EmptyState from "@/components/ui/EmptyState"
 import IconButton from "@/components/ui/IconButton"
+import Pagination from "@/components/ui/Pagination"
+import CategoryFilterSelect from "@/components/ui/CategoryFilterSelect"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { CardGridSkeleton } from "@/components/ui/Skeleton"
 import { useBooksList, useDeleteBook } from "@/lib/queries/books"
 import { useBookCategoriesList } from "@/lib/queries/book-categories"
+import { useListPage } from "@/lib/use-list-page"
 
 export default function BooksPage() {
 	const router = useRouter()
 	const { confirm, dialog } = useConfirm()
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(24)
-	const [search, setSearch] = useState("")
-	const [debouncedSearch, setDebouncedSearch] = useState("")
+	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
+		useListPage({ initialLimit: 24 })
 	const [categoryFilter, setCategoryFilter] = useState("")
 
-	useEffect(() => {
-		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
-			setPage(1)
-		}, 300)
-		return () => clearTimeout(t)
-	}, [search])
-
-	const onCategoryChange = (id: string) => { setCategoryFilter(id); setPage(1) }
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
+	const onCategoryChange = (id: string) => {
+		setCategoryFilter(id)
+		resetPageAndSelection()
+	}
 
 	const categoriesQuery = useBookCategoriesList({ limit: 100 })
 	const categories = categoriesQuery.data?.items ?? []
@@ -70,9 +65,6 @@ export default function BooksPage() {
 	const authorOf = (b: Book) =>
 		pickTranslation(b.book_translations, b.translation)?.author || ""
 
-	const fromIdx = total === 0 ? 0 : (page - 1) * limit + 1
-	const toIdx = Math.min(page * limit, total)
-
 	const hasFilters = !!debouncedSearch || !!categoryFilter
 
 	return (
@@ -102,12 +94,12 @@ export default function BooksPage() {
 						className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
 					/>
 				</div>
-				<select value={categoryFilter} onChange={(e) => onCategoryChange(e.target.value)} className="cursor-pointer px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
-					<option value="">كل التصنيفات</option>
-					{categories.map((c) => (
-						<option key={c.id} value={c.id}>{categoryName(c.book_category_translations, c.translation)}</option>
-					))}
-				</select>
+				<CategoryFilterSelect
+					categories={categories}
+					value={categoryFilter}
+					onChange={onCategoryChange}
+					getName={(c) => categoryName(c.book_category_translations, c.translation)}
+				/>
 			</div>
 
 			{loading ? (
@@ -167,23 +159,15 @@ export default function BooksPage() {
 				</div>
 			)}
 
-			{total > 0 && (
-				<div className="mt-6 flex justify-between items-center text-sm text-gray-600 flex-wrap gap-3">
-					<div className="flex items-center gap-3">
-						<span>عرض <span className="font-semibold text-gray-900">{fromIdx}–{toIdx}</span> من <span className="font-semibold text-gray-900">{total}</span></span>
-						<select value={limit} onChange={(e) => onLimitChange(Number(e.target.value))} className="cursor-pointer text-xs border border-gray-300 rounded-md px-2 py-1 focus:ring-primary focus:border-primary">
-							<option value={24}>24 / صفحة</option>
-							<option value={48}>48 / صفحة</option>
-							<option value={96}>96 / صفحة</option>
-						</select>
-					</div>
-					<div className="flex items-center gap-2">
-						<span className="text-xs text-gray-500">صفحة {page} من {pages}</span>
-						<button onClick={() => setPage(page - 1)} disabled={page === 1} className="cursor-pointer inline-flex items-center gap-1 px-3 py-1 border rounded-md disabled:opacity-50 hover:bg-gray-50"><ChevronRight className="h-4 w-4" />السابق</button>
-						<button onClick={() => setPage(page + 1)} disabled={page >= pages} className="cursor-pointer inline-flex items-center gap-1 px-3 py-1 border rounded-md disabled:opacity-50 hover:bg-gray-50">التالي<ChevronLeft className="h-4 w-4" /></button>
-					</div>
-				</div>
-			)}
+			<Pagination
+				page={page}
+				pages={pages}
+				total={total}
+				limit={limit}
+				pageSizes={[24, 48, 96]}
+				onPage={setPage}
+				onLimit={setLimit}
+			/>
 			{dialog}
 		</div>
 	)

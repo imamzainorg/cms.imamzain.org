@@ -21,14 +21,18 @@ const mockPost: Post = {
 	category_id: "c1",
 	cover_image_id: null,
 	is_published: false,
+	is_featured: false,
 	published_at: null,
 	views: 0,
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
 	post_translations: [
-		{ lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true },
+		{ lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
 	],
-	translation: { lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true },
+	translation: { lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
+	post_categories: { id: "c1", created_at: "2024-01-01", post_category_translations: [] },
+	media: null,
+	post_attachments: [],
 }
 
 const server = setupServer()

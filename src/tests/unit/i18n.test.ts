@@ -57,22 +57,16 @@ describe("pickTranslation", () => {
 describe("categoryName", () => {
 	it("returns the title of the picked translation", () => {
 		const ts: CategoryTranslation[] = [
-			{ lang: "ar", title: "مقالات" },
-			{ lang: "en", title: "Articles" },
+			{ lang: "ar", title: "مقالات", slug: "articles" },
+			{ lang: "en", title: "Articles", slug: "articles" },
 		]
 		expect(categoryName(ts)).toBe("مقالات")
-	})
-
-	it("accepts legacy `name` field (OpenAPI spec drift)", () => {
-		// The OpenAPI spec mistakenly said `name`; live API uses `title`. The util accepts both.
-		const ts = [{ lang: "ar", name: "اسم", title: "" }] as unknown as CategoryTranslation[]
-		expect(categoryName(ts)).toBe("اسم")
 	})
 
 	it("returns the Arabic 'no name' placeholder when nothing usable is found", () => {
 		expect(categoryName(undefined)).toBe("بدون اسم")
 		expect(categoryName([])).toBe("بدون اسم")
-		expect(categoryName([{ lang: "ar", title: "" }])).toBe("بدون اسم")
+		expect(categoryName([{ lang: "ar", title: "", slug: "" }])).toBe("بدون اسم")
 	})
 })
 

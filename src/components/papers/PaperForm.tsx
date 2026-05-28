@@ -184,6 +184,11 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	}
 
 	const onSubmit = async (data: PaperFormData) => {
+		const defaults = data.translations.filter((t) => t.is_default).length
+		if (defaults !== 1) {
+			toast.error("يجب اختيار لغة افتراضية واحدة بالضبط")
+			return
+		}
 		const cleaned = {
 			...data,
 			pdf_url: data.pdf_url || undefined,

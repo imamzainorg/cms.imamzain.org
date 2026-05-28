@@ -27,5 +27,5 @@ export type AcademicPaper = {
 	updated_at: string
 	academic_paper_translations: AcademicPaperTranslationItem[]
 	translation: AcademicPaperTranslationItem | null
-	academic_paper_categories?: AcademicPaperCategory | null
+	academic_paper_categories: AcademicPaperCategory
 }

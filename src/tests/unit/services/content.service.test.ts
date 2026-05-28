@@ -61,16 +61,6 @@ describe("booksService", () => {
 		await booksService.remove("b1")
 		expect(called).toBe(true)
 	})
-
-	it("listCategories hits /book-categories", async () => {
-		let called = false
-		server.use(http.get(`${API}/book-categories`, () => {
-			called = true
-			return HttpResponse.json(wrap(paginated([])))
-		}))
-		await booksService.listCategories()
-		expect(called).toBe(true)
-	})
 })
 
 describe("papersService", () => {
@@ -81,16 +71,6 @@ describe("papersService", () => {
 			return HttpResponse.json(wrap(paginated([])))
 		}))
 		await papersService.list()
-		expect(called).toBe(true)
-	})
-
-	it("listCategories hits /academic-paper-categories", async () => {
-		let called = false
-		server.use(http.get(`${API}/academic-paper-categories`, () => {
-			called = true
-			return HttpResponse.json(wrap(paginated([])))
-		}))
-		await papersService.listCategories()
 		expect(called).toBe(true)
 	})
 

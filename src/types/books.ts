@@ -21,7 +21,7 @@ export type BookCategory = {
 export type Book = {
 	id: string
 	category_id: string
-	cover_image_id: string | null
+	cover_image_id: string
 	isbn: string | null
 	pages: number | null
 	publish_year: string | null
@@ -32,6 +32,6 @@ export type Book = {
 	updated_at: string
 	book_translations: BookTranslationItem[]
 	translation: BookTranslationItem | null
-	book_categories?: BookCategory | null
-	media?: EmbeddedMedia | null
+	book_categories: BookCategory
+	media: EmbeddedMedia
 }

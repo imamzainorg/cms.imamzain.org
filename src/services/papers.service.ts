@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { AcademicPaper, AcademicPaperCategory, PaginatedResponse } from "@/types"
+import type { AcademicPaper, PaginatedResponse } from "@/types"
 
 export const papersService = {
 	list: (params?: { page?: number; limit?: number; category_id?: string; search?: string }) =>
@@ -45,7 +45,4 @@ export const papersService = {
 		api.get<PaginatedResponse<AcademicPaper>>("/academic-papers/trash", { params }),
 
 	restore: (id: string) => api.post<AcademicPaper>(`/academic-papers/${id}/restore`),
-
-	listCategories: () =>
-		api.get<PaginatedResponse<AcademicPaperCategory>>("/academic-paper-categories"),
 }

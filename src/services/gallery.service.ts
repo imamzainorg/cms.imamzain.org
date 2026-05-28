@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { GalleryImage, GalleryCategory, PaginatedResponse } from "@/types"
+import type { GalleryImage, PaginatedResponse } from "@/types"
 
 export const galleryService = {
 	list: (params?: {
@@ -46,6 +46,4 @@ export const galleryService = {
 		api.get<PaginatedResponse<GalleryImage>>("/gallery/trash", { params }),
 
 	restore: (id: string) => api.post<GalleryImage>(`/gallery/${id}/restore`),
-
-	listCategories: () => api.get<PaginatedResponse<GalleryCategory>>("/gallery-categories"),
 }

@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { Book, BookCategory, PaginatedResponse } from "@/types"
+import type { Book, PaginatedResponse } from "@/types"
 
 export const booksService = {
 	list: (params?: { page?: number; limit?: number; category_id?: string; search?: string }) =>
@@ -51,6 +51,4 @@ export const booksService = {
 		api.get<PaginatedResponse<Book>>("/books/trash", { params }),
 
 	restore: (id: string) => api.post<Book>(`/books/${id}/restore`),
-
-	listCategories: () => api.get<PaginatedResponse<BookCategory>>("/book-categories"),
 }

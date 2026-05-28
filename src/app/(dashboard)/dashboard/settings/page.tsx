@@ -457,6 +457,16 @@ function CustomSettingDialog({
 			toast.error("مفتاح موجود بالفعل")
 			return
 		}
+		const effectiveType = isEdit ? existing!.type : type
+		if (effectiveType === "json") {
+			try { JSON.parse(value) }
+			catch { toast.error("القيمة ليست JSON صالحاً"); return }
+		} else if (effectiveType === "number") {
+			if (value.trim() === "" || Number.isNaN(Number(value))) {
+				toast.error("القيمة يجب أن تكون رقماً")
+				return
+			}
+		}
 		setSaving(true)
 		try {
 			await onSave(trimmedKey, {

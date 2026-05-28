@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import Pagination from "@/components/ui/Pagination"
+import FilterPills from "@/components/ui/FilterPills"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import { ListSkeleton } from "@/components/ui/Skeleton"
@@ -13,6 +14,7 @@ import {
 	useContestAttemptsList,
 	useContestAttemptsCount,
 } from "@/lib/queries/contest"
+import { useListPage } from "@/lib/use-list-page"
 
 type SortKey = "rank" | "name" | "date"
 type SortDir = "asc" | "desc"
@@ -23,14 +25,15 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 export default function ContestPage() {
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(30)
+	const { page, setPage, limit, setLimit, resetPageAndSelection } = useListPage({ initialLimit: 30 })
 	const [filter, setFilter] = useState<"" | "true" | "false">("")
 	const [search, setSearch] = useState("")
 	const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "rank", dir: "asc" })
 
-	const onFilterChange = (f: typeof filter) => { setFilter(f); setPage(1) }
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
+	const onFilterChange = (f: typeof filter) => {
+		setFilter(f)
+		resetPageAndSelection()
+	}
 
 	const allCount = useContestAttemptsCount({})
 	const submittedCount = useContestAttemptsCount({ submitted: "true" })
@@ -138,14 +141,16 @@ export default function ContestPage() {
 					<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
 					<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بالاسم أو رقم الهاتف..." className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 				</div>
-				<div className="flex gap-1 bg-gray-100 rounded-md p-1">
-					{([["", "الكل"], ["true", "مُسلَّمة"], ["false", "قيد التقدم"]] as const).map(([k, l]) => (
-						<button key={k} onClick={() => onFilterChange(k)}
-							className={`cursor-pointer px-3 py-1 text-xs font-medium rounded transition-colors ${filter === k ? "bg-white text-primary shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
-							{l}
-						</button>
-					))}
-				</div>
+				<FilterPills
+					value={filter}
+					onChange={onFilterChange}
+					variant="segmented"
+					options={[
+						{ value: "", label: "الكل" },
+						{ value: "true", label: "مُسلَّمة" },
+						{ value: "false", label: "قيد التقدم" },
+					]}
+				/>
 			</div>
 
 			{loading ? (
@@ -231,7 +236,7 @@ export default function ContestPage() {
 				</div>
 			)}
 
-			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={onLimitChange} pageSizes={[30, 50, 100]} />
+			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={setLimit} pageSizes={[30, 50, 100]} />
 		</div>
 	)
 }

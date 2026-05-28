@@ -16,10 +16,12 @@ export type MediaRecord = {
 	height: number | null
 	created_at: string
 	/**
-	 * Pre-baked WebP variants at 320 / 768 / 1280 / 1920 px widths.
-	 * Empty when generation failed mid-upload — call POST /media/:id/regenerate-variants.
+	 * Pre-baked WebP variants at 320 / 768 / 1280 / 1920 px widths. Always present
+	 * but may be empty: confirm returns `[]` and the sharp pipeline populates
+	 * out-of-band (round 15.4). If still empty after the upload poll-window,
+	 * call POST /media/:id/regenerate-variants.
 	 */
-	variants?: MediaVariant[]
+	variants: MediaVariant[]
 }
 
 export type EmbeddedMedia = {

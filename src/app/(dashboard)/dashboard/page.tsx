@@ -103,6 +103,15 @@ export default function DashboardPage() {
 			icon: Users,
 			href: "/dashboard/proxy-visits",
 		},
+		// Round 14.9: surfaces failed admin-notification emails. Non-zero is an
+		// operational alert (stale SMTP creds / mail-provider outage) — the
+		// submission row was saved fine, just the email didn't go out.
+		{
+			label: "إشعارات بريد فاشلة",
+			value: stats?.forms.unsent_notifications ?? 0,
+			icon: Mail,
+			href: "/dashboard/contacts",
+		},
 		{
 			label: "مشتركو النشرة",
 			value: stats?.newsletter.active_subscribers ?? 0,

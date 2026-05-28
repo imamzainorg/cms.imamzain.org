@@ -15,6 +15,7 @@ import {
 import { safeFormat } from "@/lib/dates"
 import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
 import { useAuditLogsList } from "@/lib/queries/audit-logs"
+import { useListPage } from "@/lib/use-list-page"
 
 type ActionStyle = {
 	icon: LucideIcon
@@ -60,14 +61,11 @@ function pickResourceTitle(log: AuditLog): string | null {
 }
 
 export default function AuditLogsPage() {
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(30)
+	const { page, setPage, limit, setLimit } = useListPage({ initialLimit: 30 })
 	const [showFilters, setShowFilters] = useState(false)
 	const [expanded, setExpanded] = useState<string | null>(null)
 	const [filters, setFilters] = useState({ action: "", resource_type: "", from: "", to: "" })
 	const [appliedFilters, setAppliedFilters] = useState(filters)
-
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
 
 	const listQuery = useAuditLogsList({
 		page, limit,
@@ -253,7 +251,7 @@ export default function AuditLogsPage() {
 				</div>
 			)}
 
-			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={onLimitChange} pageSizes={[30, 50, 100]} />
+			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={setLimit} pageSizes={[30, 50, 100]} />
 		</div>
 	)
 }

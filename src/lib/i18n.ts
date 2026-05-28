@@ -1,7 +1,7 @@
 import type { CategoryTranslation } from "@/types"
 
 /** UI display language for the CMS itself. */
-export const UI_LANG = "ar"
+const UI_LANG = "ar"
 
 /**
  * Pick the best translation for the current UI language.
@@ -25,18 +25,13 @@ export function pickTranslation<T extends { lang: string }>(
 	return all[0]
 }
 
-/**
- * Get the human-readable name of a category translation.
- * Live API uses `title`; the OpenAPI spec mistakenly says `name` — we accept both.
- */
+/** Resolve the localized title of a category. */
 export function categoryName(
 	translations: CategoryTranslation[] | undefined,
 	resolved?: CategoryTranslation | null,
 ): string {
 	const t = pickTranslation(translations, resolved)
-	if (!t) return "بدون اسم"
-	const v = t.title || (t as unknown as { name?: string }).name || ""
-	return v || "بدون اسم"
+	return t?.title || "بدون اسم"
 }
 
 /**

@@ -1,10 +1,10 @@
 import { create } from "zustand"
 import { setAccessToken, setRefreshToken, getAccessToken, getRefreshToken } from "@/lib/api"
-import type { AdminUser } from "@/types"
+import type { MeUser } from "@/types"
 import { authService } from "@/services/auth.service"
 
 type AuthStore = {
-	user: AdminUser | null
+	user: MeUser | null
 	isLoading: boolean
 	login: (username: string, password: string) => Promise<void>
 	logout: () => Promise<void>

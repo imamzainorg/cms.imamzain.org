@@ -57,7 +57,7 @@ function localizePermission(p: string): { resourceLabel: string; verbLabel: stri
 }
 
 export default function ProfilePage() {
-	const { user } = useAuthStore()
+	const { user, logout } = useAuthStore()
 	const [pw, setPw] = useState({ current: "", next: "", confirm: "" })
 	const changePassword = useMutation({
 		mutationFn: ({ current, next }: { current: string; next: string }) =>
@@ -87,8 +87,11 @@ export default function ProfilePage() {
 			{ current: pw.current, next: pw.next },
 			{
 				onSuccess: () => {
-					toast.success("تم تغيير كلمة المرور")
+					// The server revokes every active refresh token and bumps token_version,
+					// so the current session is dead. Force a fresh login.
+					toast.success("تم تغيير كلمة المرور — يرجى تسجيل الدخول مجدداً")
 					setPw({ current: "", next: "", confirm: "" })
+					setTimeout(() => { logout() }, 1500)
 				},
 				onError: (e) => toast.error(getErrorMessage(e, "فشل تغيير كلمة المرور")),
 			},

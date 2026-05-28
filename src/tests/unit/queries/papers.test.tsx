@@ -30,6 +30,7 @@ const mockPaper: AcademicPaper = {
 		lang: "ar", title: "بحث", abstract: null, authors: ["م. أحمد"], keywords: ["fiqh"],
 		publication_venue: null, page_count: null, is_default: true,
 	},
+	academic_paper_categories: { id: "c1", created_at: "2024-01-01", academic_paper_category_translations: [] },
 }
 
 const server = setupServer()

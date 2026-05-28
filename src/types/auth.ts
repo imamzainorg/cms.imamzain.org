@@ -1,4 +1,4 @@
-export type LoginUser = {
+type LoginUser = {
 	id: string
 	username: string
 	roles: string[]
@@ -23,5 +23,3 @@ export type RefreshResponse = {
 	accessToken: string
 	refresh_token: string
 }
-
-export type AdminUser = MeUser

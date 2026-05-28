@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import type { Subscriber } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { format } from "date-fns"
 import { safeFormat } from "@/lib/dates"
 import Pagination from "@/components/ui/Pagination"
+import FilterPills from "@/components/ui/FilterPills"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -18,27 +19,20 @@ import {
 	useToggleSubscriber,
 	useDeleteSubscriber,
 } from "@/lib/queries/newsletter"
+import { useListPage } from "@/lib/use-list-page"
 
 type Filter = "all" | "active" | "inactive"
 
 export default function NewsletterPage() {
 	const [filter, setFilter] = useState<Filter>("all")
-	const [search, setSearch] = useState("")
-	const [debouncedSearch, setDebouncedSearch] = useState("")
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(50)
+	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
+		useListPage({ initialLimit: 50 })
 	const { confirm, dialog } = useConfirm()
 
-	useEffect(() => {
-		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
-			setPage(1)
-		}, 300)
-		return () => clearTimeout(t)
-	}, [search])
-
-	const onFilterChange = (f: Filter) => { setFilter(f); setPage(1) }
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
+	const onFilterChange = (f: Filter) => {
+		setFilter(f)
+		resetPageAndSelection()
+	}
 
 	// Each count is its own query — Query dedupes if the user flips filters fast.
 	const allCount = useSubscriberCount({})
@@ -131,14 +125,15 @@ export default function NewsletterPage() {
 			</div>
 
 			<div className="flex flex-col sm:flex-row gap-3">
-				<div className="flex gap-2">
-					{(["all", "active", "inactive"] as const).map((f) => (
-						<button key={f} onClick={() => onFilterChange(f)}
-							className={`cursor-pointer px-4 py-2 text-sm font-medium rounded-md transition-colors ${filter === f ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
-							{filterLabels[f]}
-						</button>
-					))}
-				</div>
+				<FilterPills
+					value={filter}
+					onChange={onFilterChange}
+					options={[
+						{ value: "all", label: filterLabels.all },
+						{ value: "active", label: filterLabels.active },
+						{ value: "inactive", label: filterLabels.inactive },
+					]}
+				/>
 				<div className="relative flex-1 max-w-sm">
 					<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
 					<input
@@ -191,7 +186,7 @@ export default function NewsletterPage() {
 				</table>
 			</div>
 
-			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={onLimitChange} />
+			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={setLimit} />
 			{dialog}
 		</div>
 	)

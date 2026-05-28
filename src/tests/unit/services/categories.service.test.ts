@@ -48,8 +48,8 @@ describe.each(cases)("$name", ({ svc, path }) => {
 			body = await request.json()
 			return HttpResponse.json(wrap({}))
 		}))
-		await svc.create({ translations: [{ lang: "ar", title: "تصنيف" }] })
-		expect(body).toEqual({ translations: [{ lang: "ar", title: "تصنيف" }] })
+		await svc.create({ translations: [{ lang: "ar", title: "تصنيف", slug: "tasneef" }] })
+		expect(body).toEqual({ translations: [{ lang: "ar", title: "تصنيف", slug: "tasneef" }] })
 	})
 
 	it(`update PATCHes /${path}/:id`, async () => {

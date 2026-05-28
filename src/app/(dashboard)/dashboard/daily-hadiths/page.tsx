@@ -22,6 +22,7 @@ import {
 	usePinHadith,
 	useUnpinHadith,
 } from "@/lib/queries/daily-hadiths"
+import { useTranslationsField } from "@/lib/use-translations-field"
 
 type DialogState =
 	| { mode: "create" }
@@ -187,35 +188,24 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 	const updateHadith = useUpdateHadith()
 	const saving = createHadith.isPending || updateHadith.isPending
 
-	const [translations, setTranslations] = useState<DailyHadithTranslation[]>(
-		initial?.daily_hadith_translations.length
-			? initial.daily_hadith_translations.map((t) => ({ ...t }))
-			: [{ lang: "ar", content: "", source: null, is_default: true }],
-	)
 	const [isActive, setIsActive] = useState(initial?.is_active ?? true)
-	const [activeLang, setActiveLang] = useState(translations[0].lang)
-
-	const updateT = (i: number, patch: Partial<DailyHadithTranslation>) => {
-		setTranslations((prev) => prev.map((t, idx) => idx === i ? { ...t, ...patch } : t))
+	// On create, seed ar/en/fa tabs so the editor sees all expected languages
+	// up-front. Empty tabs are filtered out at submit time.
+	const seedTranslations = (): DailyHadithTranslation[] => {
+		if (initial?.daily_hadith_translations.length) {
+			return initial.daily_hadith_translations.map((t) => ({ ...t }))
+		}
+		const seedLangs = ["ar", "en", "fa"]
+		return seedLangs
+			.filter((code) => languages.some((l) => l.code === code))
+			.map((code, i) => ({ lang: code, content: "", source: null, is_default: i === 0 }))
 	}
-
-	const addLang = () => {
-		const used = translations.map((t) => t.lang)
-		const next = languages.find((l) => !used.includes(l.code))
-		if (!next) { toast.error("لا توجد لغات إضافية"); return }
-		setTranslations([...translations, { lang: next.code, content: "", source: null, is_default: false }])
-		setActiveLang(next.code)
-	}
-
-	const removeLang = (i: number) => {
-		const next = translations.filter((_, idx) => idx !== i)
-		setTranslations(next.length ? next : [{ lang: "ar", content: "", source: null, is_default: true }])
-		if (translations[i].lang === activeLang) setActiveLang(next[0]?.lang ?? "ar")
-	}
-
-	const setDefault = (i: number) => {
-		setTranslations(translations.map((t, idx) => ({ ...t, is_default: idx === i })))
-	}
+	const { translations, activeLang, setActiveLang, updateAt: updateT, addLang, removeAt: removeLang, setDefault } =
+		useTranslationsField<DailyHadithTranslation>({
+			initial: seedTranslations(),
+			languages,
+			makeBlank: (lang) => ({ lang, content: "", source: null, is_default: false }),
+		})
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault()

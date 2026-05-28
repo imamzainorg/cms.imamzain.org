@@ -34,7 +34,7 @@ const translationSchema = z.object({
 
 const bookFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
-	cover_image_id: z.string().nullable().optional(),
+	cover_image_id: z.string().min(1, "صورة الغلاف مطلوبة"),
 	isbn: z.string().optional(),
 	pages: z.number().optional(),
 	publish_year: z.string().optional(),
@@ -70,7 +70,7 @@ export default function BookForm({ book }: { book?: Book }) {
 		if (!book) {
 			return {
 				category_id: "",
-				cover_image_id: null,
+				cover_image_id: "",
 				publish_year: String(new Date().getFullYear()),
 				translations: [blankTranslation()],
 			}
@@ -89,7 +89,7 @@ export default function BookForm({ book }: { book?: Book }) {
 			: [blankTranslation()]
 		return {
 			category_id: book.category_id ?? "",
-			cover_image_id: book.cover_image_id ?? null,
+			cover_image_id: book.cover_image_id ?? "",
 			isbn: book.isbn ?? "",
 			pages: book.pages ?? undefined,
 			publish_year: book.publish_year ?? "",
@@ -137,9 +137,14 @@ export default function BookForm({ book }: { book?: Book }) {
 	}
 
 	const onSubmit = async (data: BookFormData) => {
+		const defaults = data.translations.filter((t) => t.is_default).length
+		if (defaults !== 1) {
+			toast.error("يجب اختيار لغة افتراضية واحدة بالضبط")
+			return
+		}
 		const body = {
 			category_id: data.category_id,
-			cover_image_id: data.cover_image_id ?? undefined,
+			cover_image_id: data.cover_image_id,
 			isbn: data.isbn || undefined,
 			pages: data.pages,
 			publish_year: data.publish_year || undefined,
@@ -254,14 +259,17 @@ export default function BookForm({ book }: { book?: Book }) {
 				</div>
 
 				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
-					<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">صورة الغلاف</h3>
+					<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+						صورة الغلاف <span className="text-red-500">*</span>
+					</h3>
 					<Controller
 						control={control}
 						name="cover_image_id"
 						render={({ field: f }) => (
-							<MediaInput value={f.value ?? undefined} onChange={f.onChange} />
+							<MediaInput value={f.value || undefined} onChange={(v) => f.onChange(v ?? "")} />
 						)}
 					/>
+					{errors.cover_image_id && <p className="mt-2 text-sm text-red-600">{errors.cover_image_id.message}</p>}
 				</div>
 
 				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-3">

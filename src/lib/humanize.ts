@@ -138,6 +138,12 @@ const ACTION_VERBS: Record<string, string> = {
 	replied: "ردّ على",
 	send: "أرسل",
 	sent: "أرسل",
+	complete: "أكمل",
+	completed: "أكمل",
+	cancel: "ألغى",
+	cancelled: "ألغى",
+	queue: "أدرج في الطابور",
+	queued: "أدرج في الطابور",
 	import: "استورد",
 	export: "صدّر",
 }

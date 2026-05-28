@@ -19,8 +19,6 @@ const mockSub = {
 
 const server = setupServer(
 	http.get(`${API}/newsletter/subscribers`, () => HttpResponse.json(wrap(paginated([mockSub])))),
-	http.post(`${API}/newsletter/subscribe`, () => HttpResponse.json(wrap({ message: "Subscribed" }), { status: 201 })),
-	http.post(`${API}/newsletter/unsubscribe`, () => HttpResponse.json(wrap({ message: "Unsubscribed" }), { status: 201 })),
 	http.post(`${API}/newsletter/subscribers/s1/unsubscribe`, () => HttpResponse.json(wrap({ ...mockSub, is_active: false }))),
 	http.post(`${API}/newsletter/subscribers/s1/resubscribe`, () => HttpResponse.json(wrap({ ...mockSub, is_active: true }))),
 	http.delete(`${API}/newsletter/subscribers/s1`, () => HttpResponse.json(wrap({ message: "Deleted" }))),
@@ -35,12 +33,6 @@ describe("newsletterService", () => {
 		const { data } = await newsletterService.list()
 		expect(data.items).toHaveLength(1)
 		expect(data.items[0].email).toBe("test@example.com")
-	})
-	it("subscribes an email (public)", async () => {
-		await newsletterService.subscribe("test@example.com")
-	})
-	it("unsubscribes an email (public)", async () => {
-		await newsletterService.unsubscribePublic("test@example.com")
 	})
 	it("admin unsubscribe by id flips is_active to false", async () => {
 		const { data } = await newsletterService.unsubscribeById("s1")

@@ -7,6 +7,7 @@ import { getErrorMessage } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
 import { Loader2, Users, CheckCircle, XCircle, Clock } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/Skeleton"
+import FilterPills from "@/components/ui/FilterPills"
 import {
 	useProxyVisitsList,
 	useUpdateProxyVisit,
@@ -89,26 +90,17 @@ export default function ProxyVisitsPage() {
 			</h1>
 
 			<div className="flex gap-2 mb-4 flex-wrap items-center">
-				{(
-					[
-						"",
-						"PENDING",
-						"APPROVED",
-						"COMPLETED",
-						"REJECTED",
-					] as const
-				).map((f) => (
-					<button
-						key={f}
-						onClick={() => {
-							setStatusFilter(f)
-							setSelected(null)
-						}}
-						className={`px-3 py-1.5 text-sm font-medium rounded-md cursor-pointer ${statusFilter === f ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}
-					>
-						{filterLabels[f]}
-					</button>
-				))}
+				<FilterPills
+					value={statusFilter}
+					onChange={(v) => { setStatusFilter(v); setSelected(null) }}
+					options={[
+						{ value: "", label: filterLabels[""] },
+						{ value: "PENDING", label: filterLabels.PENDING },
+						{ value: "APPROVED", label: filterLabels.APPROVED },
+						{ value: "COMPLETED", label: filterLabels.COMPLETED },
+						{ value: "REJECTED", label: filterLabels.REJECTED },
+					]}
+				/>
 				{isFetching && !isLoading && (
 					<Loader2
 						className="h-4 w-4 animate-spin text-primary"

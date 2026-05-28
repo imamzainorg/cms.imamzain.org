@@ -27,6 +27,8 @@ export type DashboardFormsStats = {
 	contact_recent: number
 	proxy_visit_pending: number
 	proxy_visit_recent: number
+	/** Count of submissions whose admin notification email failed (round 14.9). Non-zero = SMTP / mail-provider alert. */
+	unsent_notifications: number
 }
 
 export type DashboardContestStats = {

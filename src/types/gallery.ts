@@ -2,7 +2,7 @@ import type { CategoryTranslation } from "./categories"
 
 export type GalleryImageTranslationItem = {
 	lang: string
-	title: string | null
+	title: string
 	description: string | null
 }
 

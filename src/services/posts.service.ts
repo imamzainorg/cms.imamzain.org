@@ -26,8 +26,6 @@ export const postsService = {
 
 	get: (id: string) => api.get<Post>(`/posts/admin/${id}`),
 
-	getBySlug: (slug: string) => api.get<Post>(`/posts/by-slug/${slug}`),
-
 	create: (body: {
 		category_id: string
 		cover_image_id?: string | null

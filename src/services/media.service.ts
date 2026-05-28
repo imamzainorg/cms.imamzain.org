@@ -2,7 +2,7 @@ import { api } from "@/lib/api"
 import type { MediaRecord, PaginatedResponse } from "@/types"
 
 /**
- * Shape of the response from POST /media/upload-url (Round 8).
+ * Shape of the response from POST /media/upload-url.
  *
  * - `mediaId`: pinned at confirm-time; safe to use in optimistic UI and
  *   draft post `attachment_ids` before the upload completes.
@@ -13,9 +13,8 @@ import type { MediaRecord, PaginatedResponse } from "@/types"
 export type UploadUrlResponse = {
 	uploadUrl: string
 	key: string
-	publicUrl?: string
-	mediaId?: string
-	maxBytes?: number
+	mediaId: string
+	maxBytes: number
 }
 
 /** Surfaced as a typed error from `uploadFile` so the UI can react gracefully. */
@@ -27,6 +26,23 @@ export class MediaSizeExceededError extends Error {
 		super(`الملف يتجاوز الحد المسموح (${mb} ميغابايت) لنوع ${mimeType}.`)
 		this.name = "MediaSizeExceededError"
 		this.maxBytes = maxBytes
+		this.mimeType = mimeType
+	}
+}
+
+/** MIMEs the API will accept on /media/upload-url. Mirrors the server-side allowlist. */
+export const ALLOWED_MEDIA_MIME_TYPES = [
+	"image/jpeg",
+	"image/png",
+	"image/gif",
+	"image/webp",
+] as const
+
+export class MediaMimeNotAllowedError extends Error {
+	readonly mimeType: string
+	constructor(mimeType: string) {
+		super(`نوع الملف غير مدعوم (${mimeType || "غير معروف"}). الأنواع المسموحة: JPEG, PNG, GIF, WebP.`)
+		this.name = "MediaMimeNotAllowedError"
 		this.mimeType = mimeType
 	}
 }
@@ -59,42 +75,65 @@ export const mediaService = {
 	remove: (id: string) => api.delete(`/media/${id}`),
 
 	uploadFile: async (file: File): Promise<MediaRecord> => {
-		// Step 1: ask the API for a pre-signed URL + the per-MIME cap.
-		const { data: urlData } = await api.post<UploadUrlResponse>(
-			"/media/upload-url",
-			{ filename: file.name, mime_type: file.type },
-		)
+		// Validate MIME against the server allowlist before the round-trip.
+		// Saves the user the failed /upload-url call + the API a 400.
+		if (!(ALLOWED_MEDIA_MIME_TYPES as readonly string[]).includes(file.type)) {
+			throw new MediaMimeNotAllowedError(file.type)
+		}
 
-		// Step 2: fail-fast on size *before* the (potentially slow) PUT. The
-		// server enforces this again at /media/confirm with a 413, so even if
-		// the client check is bypassed we don't store oversized files.
-		if (typeof urlData.maxBytes === "number" && file.size > urlData.maxBytes) {
+		const { data: urlData } = await mediaService.requestUploadUrl(file.name, file.type)
+
+		// Fail-fast on size before the (potentially slow) PUT. The server
+		// enforces this again at /media/confirm with a 413, so even if the
+		// client check is bypassed we don't store oversized files.
+		if (file.size > urlData.maxBytes) {
 			throw new MediaSizeExceededError(urlData.maxBytes, file.type)
 		}
 
-		// Step 3: upload the bytes directly to R2.
 		await fetch(urlData.uploadUrl, {
 			method: "PUT",
 			body: file,
 			headers: { "Content-Type": file.type },
 		})
 
-		// Step 4: probe dimensions in parallel-friendly fashion.
 		const dimensions = await getImageDimensions(file)
 
-		// Step 5: confirm — variants generation is synchronous so the response
-		// already contains variants[]. Surfaces 413 if R2's authoritative size
-		// exceeds the cap (the server deletes the orphan object for us).
-		const { data: record } = await api.post<MediaRecord>("/media/confirm", {
+		// As of round 15.4, confirm returns immediately with `variants: []` —
+		// sharp generation is queued on the next event-loop tick. Poll the
+		// detail endpoint until variants land (typically 1–3 s) so the UI
+		// doesn't briefly flash "no variants" + a regenerate prompt.
+		const { data: confirmed } = await mediaService.confirmUpload({
 			key: urlData.key,
 			filename: file.name,
 			mime_type: file.type,
 			file_size: file.size,
 			...dimensions,
 		})
-
-		return record
+		return await pollForVariants(confirmed)
 	},
+}
+
+/**
+ * Poll `GET /media/:id` every 500 ms (up to ~6 s) until variants populate.
+ * Returns the latest record either way — the caller decides whether to
+ * surface the "regenerate" button when the array stays empty past timeout.
+ */
+async function pollForVariants(initial: MediaRecord): Promise<MediaRecord> {
+	if (initial.variants && initial.variants.length > 0) return initial
+	const maxAttempts = 12
+	let current = initial
+	for (let i = 0; i < maxAttempts; i++) {
+		await new Promise((r) => setTimeout(r, 500))
+		try {
+			const { data } = await mediaService.get(initial.id)
+			current = data
+			if (data.variants && data.variants.length > 0) return data
+		} catch {
+			// Network blip — keep polling; the user can retry by clicking
+			// the regenerate button if variants never land.
+		}
+	}
+	return current
 }
 
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {

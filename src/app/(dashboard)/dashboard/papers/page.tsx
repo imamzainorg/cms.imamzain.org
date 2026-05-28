@@ -1,39 +1,34 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { AcademicPaper } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit, Trash2, GraduationCap, ExternalLink, Search, Calendar, Tag, FileText, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Edit, Trash2, GraduationCap, ExternalLink, Search, Calendar, Tag, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
 import EmptyState from "@/components/ui/EmptyState"
+import Pagination from "@/components/ui/Pagination"
+import CategoryFilterSelect from "@/components/ui/CategoryFilterSelect"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { ListSkeleton } from "@/components/ui/Skeleton"
 import { usePapersList, useDeletePaper } from "@/lib/queries/papers"
 import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
+import { useListPage } from "@/lib/use-list-page"
 
 export default function PapersPage() {
 	const router = useRouter()
 	const { confirm, dialog } = useConfirm()
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(20)
-	const [search, setSearch] = useState("")
-	const [debouncedSearch, setDebouncedSearch] = useState("")
+	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
+		useListPage({ initialLimit: 20 })
 	const [categoryFilter, setCategoryFilter] = useState("")
 
-	useEffect(() => {
-		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
-			setPage(1)
-		}, 300)
-		return () => clearTimeout(t)
-	}, [search])
-
-	const onCategoryChange = (id: string) => { setCategoryFilter(id); setPage(1) }
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
+	const onCategoryChange = (id: string) => {
+		setCategoryFilter(id)
+		resetPageAndSelection()
+	}
 
 	const categoriesQuery = usePaperCategoriesList({ limit: 100 })
 	const categories = categoriesQuery.data?.items ?? []
@@ -73,9 +68,6 @@ export default function PapersPage() {
 	const keywordsOf = (p: AcademicPaper) =>
 		pickTranslation(p.academic_paper_translations, p.translation)?.keywords || []
 
-	const fromIdx = total === 0 ? 0 : (page - 1) * limit + 1
-	const toIdx = Math.min(page * limit, total)
-
 	const hasFilters = !!debouncedSearch || !!categoryFilter
 
 	return (
@@ -101,14 +93,12 @@ export default function PapersPage() {
 					<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
 					<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بالعنوان أو الكلمات المفتاحية..." className="w-full pr-9 pl-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 				</div>
-				<select value={categoryFilter} onChange={(e) => onCategoryChange(e.target.value)} className="cursor-pointer px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
-					<option value="">كل التصنيفات</option>
-					{categories.map((c) => (
-						<option key={c.id} value={c.id}>
-							{categoryName(c.academic_paper_category_translations, c.translation)}
-						</option>
-					))}
-				</select>
+				<CategoryFilterSelect
+					categories={categories}
+					value={categoryFilter}
+					onChange={onCategoryChange}
+					getName={(c) => categoryName(c.academic_paper_category_translations, c.translation)}
+				/>
 			</div>
 
 			{loading ? (
@@ -178,23 +168,14 @@ export default function PapersPage() {
 				</div>
 			)}
 
-			{total > 0 && (
-				<div className="mt-6 flex justify-between items-center text-sm text-gray-600 flex-wrap gap-3">
-					<div className="flex items-center gap-3">
-						<span>عرض <span className="font-semibold text-gray-900">{fromIdx}–{toIdx}</span> من <span className="font-semibold text-gray-900">{total}</span></span>
-						<select value={limit} onChange={(e) => onLimitChange(Number(e.target.value))} className="cursor-pointer text-xs border border-gray-300 rounded-md px-2 py-1 focus:ring-primary focus:border-primary">
-							<option value={20}>20 / صفحة</option>
-							<option value={50}>50 / صفحة</option>
-							<option value={100}>100 / صفحة</option>
-						</select>
-					</div>
-					<div className="flex items-center gap-2">
-						<span className="text-xs text-gray-500">صفحة {page} من {pages}</span>
-						<button onClick={() => setPage(page - 1)} disabled={page === 1} className="cursor-pointer inline-flex items-center gap-1 px-3 py-1 border rounded-md disabled:opacity-50 hover:bg-gray-50"><ChevronRight className="h-4 w-4" />السابق</button>
-						<button onClick={() => setPage(page + 1)} disabled={page >= pages} className="cursor-pointer inline-flex items-center gap-1 px-3 py-1 border rounded-md disabled:opacity-50 hover:bg-gray-50">التالي<ChevronLeft className="h-4 w-4" /></button>
-					</div>
-				</div>
-			)}
+			<Pagination
+				page={page}
+				pages={pages}
+				total={total}
+				limit={limit}
+				onPage={setPage}
+				onLimit={setLimit}
+			/>
 			{dialog}
 		</div>
 	)

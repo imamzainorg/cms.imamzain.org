@@ -19,7 +19,7 @@ const API = "http://localhost:3000/api/v1"
 const mockBook: Book = {
 	id: "b1",
 	category_id: "c1",
-	cover_image_id: null,
+	cover_image_id: "m1",
 	isbn: null,
 	pages: null,
 	publish_year: null,
@@ -32,6 +32,8 @@ const mockBook: Book = {
 		{ lang: "ar", title: "كتاب", author: null, publisher: null, description: null, series: null, is_default: true },
 	],
 	translation: { lang: "ar", title: "كتاب", author: null, publisher: null, description: null, series: null, is_default: true },
+	book_categories: { id: "c1", created_at: "2024-01-01", book_category_translations: [] },
+	media: { id: "m1", url: "https://cdn.test/m1.jpg" },
 }
 
 const server = setupServer()

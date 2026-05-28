@@ -20,6 +20,7 @@ import {
 	useDeleteGalleryItem,
 } from "@/lib/queries/gallery"
 import { useGalleryCategoriesList } from "@/lib/queries/gallery-categories"
+import { useTranslationsField } from "@/lib/use-translations-field"
 
 export default function GalleryPage() {
 	const [search, setSearch] = useState("")
@@ -178,16 +179,25 @@ function GalleryImageDialog({
 	const [takenAt, setTakenAt] = useState(image.taken_at ? image.taken_at.slice(0, 10) : "")
 	const [tags, setTags] = useState<string[]>(image.tags ?? [])
 	const [locations, setLocations] = useState<string[]>(image.locations ?? [])
-	const [translations, setTranslations] = useState(
-		image.gallery_image_translations.length
+	const [tagInput, setTagInput] = useState("")
+	const [locInput, setLocInput] = useState("")
+	const {
+		translations,
+		activeLang,
+		setActiveLang,
+		updateAt: updateT,
+		addLang: addTranslation,
+		removeAt: removeTranslation,
+	} = useTranslationsField<{ lang: string; title: string; description: string }>({
+		initial: image.gallery_image_translations.length
 			? image.gallery_image_translations.map((t) => ({
 				lang: t.lang, title: t.title ?? "", description: t.description ?? "",
 			}))
-			: [{ lang: "ar", title: "", description: "" }]
-	)
-	const [tagInput, setTagInput] = useState("")
-	const [locInput, setLocInput] = useState("")
-	const [activeLang, setActiveLang] = useState(translations[0]?.lang ?? "ar")
+			: [{ lang: "ar", title: "", description: "" }],
+		languages,
+		makeBlank: (lang) => ({ lang, title: "", description: "" }),
+		requireDefault: false,
+	})
 
 	const addTag = () => {
 		if (!tagInput.trim() || tags.includes(tagInput.trim())) return
@@ -196,26 +206,6 @@ function GalleryImageDialog({
 	const addLoc = () => {
 		if (!locInput.trim() || locations.includes(locInput.trim())) return
 		setLocations([...locations, locInput.trim()]); setLocInput("")
-	}
-
-	const updateT = (i: number, patch: Partial<typeof translations[0]>) => {
-		const next = [...translations]
-		next[i] = { ...next[i], ...patch }
-		setTranslations(next)
-	}
-
-	const addTranslation = () => {
-		const used = translations.map((t) => t.lang)
-		const next = languages.find((l) => !used.includes(l.code))
-		if (!next) { toast.error("لا توجد لغات إضافية"); return }
-		setTranslations([...translations, { lang: next.code, title: "", description: "" }])
-		setActiveLang(next.code)
-	}
-
-	const removeTranslation = (i: number) => {
-		const next = translations.filter((_, idx) => idx !== i)
-		setTranslations(next.length ? next : [{ lang: "ar", title: "", description: "" }])
-		if (translations[i].lang === activeLang) setActiveLang(next[0]?.lang ?? "ar")
 	}
 
 	const handleSave = () => {

@@ -5,10 +5,6 @@ export const newsletterService = {
 	list: (params?: { page?: number; limit?: number; is_active?: boolean; search?: string }) =>
 		api.get<PaginatedResponse<Subscriber>>("/newsletter/subscribers", { params }),
 
-	subscribe: (email: string) => api.post("/newsletter/subscribe", { email }),
-
-	unsubscribePublic: (email: string) => api.post("/newsletter/unsubscribe", { email }),
-
 	unsubscribeById: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/unsubscribe`),
 
 	resubscribeById: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/resubscribe`),

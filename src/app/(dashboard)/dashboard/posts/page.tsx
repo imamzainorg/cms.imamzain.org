@@ -27,6 +27,7 @@ import EmptyState from "@/components/ui/EmptyState"
 import Badge from "@/components/ui/Badge"
 import PageHeader from "@/components/layout/PageHeader"
 import Pagination from "@/components/ui/Pagination"
+import CategoryFilterSelect from "@/components/ui/CategoryFilterSelect"
 import { CardGridSkeleton, ListSkeleton } from "@/components/ui/Skeleton"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import Link from "next/link"
@@ -149,7 +150,12 @@ export default function PostsPage() {
 			{ ids, is_published },
 			{
 				onSuccess: ({ data }) => {
-					toast.success(`${data.affected} مقالة ${is_published ? "نُشرت" : "سُحبت"}`)
+					const verb = is_published ? "نُشرت" : "سُحبت"
+					const main = `${data.affected} مقالة ${verb}`
+					const note = data.skipped.length > 0
+						? ` — تجاوز ${data.skipped.length} (سبق نشرها أو محذوفة)`
+						: ""
+					toast.success(main + note)
 					clearSelected()
 				},
 				onError: (e) => toast.error(getErrorMessage(e, "فشلت العملية")),
@@ -169,7 +175,11 @@ export default function PostsPage() {
 		if (!ok) return
 		bulkDelete.mutate(ids, {
 			onSuccess: ({ data }) => {
-				toast.success(`تم حذف ${data.affected} مقالة`)
+				const main = `تم حذف ${data.affected} مقالة`
+				const note = data.skipped.length > 0
+					? ` — تجاوز ${data.skipped.length} (محذوفة بالفعل)`
+					: ""
+				toast.success(main + note)
 				clearSelected()
 			},
 			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
@@ -240,18 +250,12 @@ export default function PostsPage() {
 						className="w-full pr-9 pl-3 py-1.5 text-sm bg-white border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
 					/>
 				</div>
-				<select
+				<CategoryFilterSelect
+					categories={categories}
 					value={categoryFilter}
-					onChange={(e) => onCategoryChange(e.target.value)}
-					className="cursor-pointer px-3 py-1.5 text-sm bg-white border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-				>
-					<option value="">كل التصنيفات</option>
-					{categories.map((c) => (
-						<option key={c.id} value={c.id}>
-							{categoryName(c.post_category_translations, c.translation)}
-						</option>
-					))}
-				</select>
+					onChange={onCategoryChange}
+					getName={(c) => categoryName(c.post_category_translations, c.translation)}
+				/>
 				<div className="flex gap-0.5 bg-white border border-[hsl(var(--border))] rounded-md p-0.5 shadow-soft">
 					{(
 						[

@@ -10,6 +10,7 @@ import { Send, Plus, Mail, Trash2, Clock, Edit, Pause } from "lucide-react"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import Pagination from "@/components/ui/Pagination"
+import FilterPills from "@/components/ui/FilterPills"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { ListSkeleton } from "@/components/ui/Skeleton"
 import {
@@ -17,6 +18,7 @@ import {
 	useCancelCampaign,
 	useDeleteCampaign,
 } from "@/lib/queries/campaigns"
+import { useListPage } from "@/lib/use-list-page"
 
 const STATUS_LABEL: Record<CampaignStatus, string> = {
 	draft: "مسودة",
@@ -39,8 +41,7 @@ const STATUS_BADGE: Record<CampaignStatus, string> = {
 export default function CampaignsPage() {
 	const router = useRouter()
 	const { confirm, dialog: confirmDialog } = useConfirm()
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(20)
+	const { page, setPage, limit, setLimit, resetPageAndSelection } = useListPage({ initialLimit: 20 })
 	const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all")
 
 	const listQuery = useCampaignsList({
@@ -98,16 +99,21 @@ export default function CampaignsPage() {
 				}
 			/>
 
-			<div className="bg-white rounded-xl border border-gray-200 p-3 flex gap-1 overflow-x-auto">
-				{(["all", "draft", "scheduled", "sending", "sent", "cancelled", "failed"] as const).map((s) => (
-					<button
-						key={s}
-						onClick={() => { setStatusFilter(s); setPage(1) }}
-						className={`cursor-pointer px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap ${statusFilter === s ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-50"}`}
-					>
-						{s === "all" ? "الكل" : STATUS_LABEL[s]}
-					</button>
-				))}
+			<div className="bg-white rounded-xl border border-gray-200 p-3 overflow-x-auto">
+				<FilterPills
+					value={statusFilter}
+					onChange={(v) => { setStatusFilter(v); resetPageAndSelection() }}
+					variant="segmented"
+					options={[
+						{ value: "all", label: "الكل" },
+						{ value: "draft", label: STATUS_LABEL.draft },
+						{ value: "scheduled", label: STATUS_LABEL.scheduled },
+						{ value: "sending", label: STATUS_LABEL.sending },
+						{ value: "sent", label: STATUS_LABEL.sent },
+						{ value: "cancelled", label: STATUS_LABEL.cancelled },
+						{ value: "failed", label: STATUS_LABEL.failed },
+					]}
+				/>
 			</div>
 
 			{listQuery.isLoading ? (
@@ -199,7 +205,7 @@ export default function CampaignsPage() {
 				</div>
 			)}
 
-			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={(n) => { setLimit(n); setPage(1) }} />
+			<Pagination page={page} pages={pages} total={total} limit={limit} onPage={setPage} onLimit={setLimit} />
 			{confirmDialog}
 		</div>
 	)

@@ -23,6 +23,7 @@ import {
 	useDeleteMedia,
 	useRegenerateVariants,
 } from "@/lib/queries/media"
+import { useListPage } from "@/lib/use-list-page"
 
 type ViewMode = "grid" | "list"
 
@@ -39,25 +40,17 @@ const MIME_FILTERS = [
  * Trigram-indexed substring match on filename + alt_text per API docs.
  */
 export default function MediaPage() {
-	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(50)
-	const [search, setSearch] = useState("")
-	const [debouncedSearch, setDebouncedSearch] = useState("")
+	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
+		useListPage({ initialLimit: 50 })
 	const [mimeType, setMimeType] = useState("")
 	const [view, setView] = useState<ViewMode>("grid")
 	const [editing, setEditing] = useState<MediaRecord | null>(null)
 	const { confirm, dialog } = useConfirm()
 
-	useEffect(() => {
-		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
-			setPage(1)
-		}, 300)
-		return () => clearTimeout(t)
-	}, [search])
-
-	const onLimitChange = (n: number) => { setLimit(n); setPage(1) }
-	const onMimeChange = (v: string) => { setMimeType(v); setPage(1) }
+	const onMimeChange = (v: string) => {
+		setMimeType(v)
+		resetPageAndSelection()
+	}
 
 	const listQuery = useMediaList({
 		page,
@@ -287,7 +280,7 @@ export default function MediaPage() {
 				page={page} pages={pages} total={total} limit={limit}
 				pageSizes={[20, 50, 100]}
 				onPage={setPage}
-				onLimit={onLimitChange}
+				onLimit={setLimit}
 			/>
 
 			{editing && (

@@ -157,12 +157,19 @@ export default function PostForm({ post }: { post?: Post }) {
 	}
 
 	const onSubmit = (data: PostFormData) => {
+		const defaults = data.translations.filter((t) => t.is_default).length
+		if (defaults !== 1) {
+			toast.error("يجب اختيار لغة افتراضية واحدة بالضبط")
+			return
+		}
 		const body = {
 			category_id: data.category_id,
 			cover_image_id: data.cover_image_id ?? undefined,
 			is_published: data.is_published,
 			is_featured: data.is_featured,
-			published_at: data.published_at || undefined,
+			// datetime-local lacks a timezone — convert through the browser's
+			// local zone to a real ISO timestamp the API expects.
+			published_at: data.published_at ? new Date(data.published_at).toISOString() : undefined,
 			translations: data.translations.map((t) => ({
 				...t,
 				summary: t.summary || undefined,

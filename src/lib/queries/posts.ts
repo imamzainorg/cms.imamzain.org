@@ -7,6 +7,7 @@ import {
 import { postsService } from "@/services/posts.service"
 import type { Post, PaginatedResponse } from "@/types"
 import { queryKeys } from "./keys"
+import { makeResourceQueries } from "./factory"
 
 type ListParams = {
 	page?: number
@@ -18,50 +19,30 @@ type ListParams = {
 	sort?: "newest" | "views"
 }
 
-export function usePostsList(params: ListParams) {
-	return useQuery({
-		queryKey: queryKeys.posts.list(params),
-		queryFn: async () => (await postsService.list(params)).data,
-		placeholderData: keepPreviousData,
-	})
-}
+type CreateBody = Parameters<typeof postsService.create>[0]
+type UpdateBody = Parameters<typeof postsService.update>[1]
 
-export function usePost(id: string | undefined) {
-	return useQuery({
-		queryKey: queryKeys.posts.detail(id ?? ""),
-		queryFn: async () => (await postsService.get(id!)).data,
-		enabled: !!id,
-	})
-}
+const queries = makeResourceQueries<
+	Post,
+	PaginatedResponse<Post>,
+	CreateBody,
+	UpdateBody,
+	ListParams
+>({
+	service: postsService,
+	keys: queryKeys.posts,
+})
+
+export const usePostsList = queries.useList
+export const usePost = queries.useOne
+export const useCreatePost = queries.useCreate
+export const useUpdatePost = queries.useUpdate
 
 export function usePostsTrash(params: { page?: number; limit?: number } = {}) {
 	return useQuery({
 		queryKey: queryKeys.trash.resource("posts", params),
 		queryFn: async () => (await postsService.trash(params)).data,
 		placeholderData: keepPreviousData,
-	})
-}
-
-type CreateBody = Parameters<typeof postsService.create>[0]
-type UpdateBody = Parameters<typeof postsService.update>[1]
-
-export function useCreatePost() {
-	const qc = useQueryClient()
-	return useMutation({
-		mutationFn: (body: CreateBody) => postsService.create(body),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.posts.lists() }),
-	})
-}
-
-export function useUpdatePost() {
-	const qc = useQueryClient()
-	return useMutation({
-		mutationFn: ({ id, body }: { id: string; body: UpdateBody }) =>
-			postsService.update(id, body),
-		onSuccess: (_data, { id }) => {
-			qc.invalidateQueries({ queryKey: queryKeys.posts.lists() })
-			qc.invalidateQueries({ queryKey: queryKeys.posts.detail(id) })
-		},
 	})
 }
 
@@ -107,6 +88,11 @@ export function useBulkDeletePosts() {
 	})
 }
 
+/**
+ * Optimistic publish toggle: flip every cached list page immediately, roll
+ * back on error. The server-side cron also flips scheduled posts to
+ * published at their due time, but those land via a normal invalidation.
+ */
 export function useTogglePublishPost() {
 	const qc = useQueryClient()
 	return useMutation({

@@ -1,4 +1,5 @@
 import {
+	keepPreviousData,
 	useMutation,
 	useQuery,
 	useQueryClient,
@@ -32,7 +33,40 @@ export const useDailyHadithsList = queries.useList
 export const useDailyHadith = queries.useOne
 export const useCreateHadith = queries.useCreate
 export const useUpdateHadith = queries.useUpdate
-export const useDeleteHadith = queries.useRemove
+
+// Hand-rolled instead of queries.useRemove: soft-delete must also refresh the
+// trash view, and the factory only knows about the resource's own branch.
+export function useDeleteHadith() {
+	const qc = useQueryClient()
+	return useMutation({
+		mutationFn: (id: string) => dailyHadithsService.remove(id),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.dailyHadiths.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
+		},
+	})
+}
+
+export function useDailyHadithsTrash(params: { page?: number; limit?: number } = {}) {
+	return useQuery({
+		queryKey: queryKeys.trash.resource("daily-hadiths", params),
+		queryFn: async () => (await dailyHadithsService.trash(params)).data,
+		placeholderData: keepPreviousData,
+	})
+}
+
+export function useRestoreHadith() {
+	const qc = useQueryClient()
+	return useMutation({
+		mutationFn: (id: string) => dailyHadithsService.restore(id),
+		onSuccess: () => {
+			// `.all` (not `.lists()`) so /today and /pins refresh too — a
+			// restored hadith rejoins the rotation immediately.
+			qc.invalidateQueries({ queryKey: queryKeys.dailyHadiths.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
+		},
+	})
+}
 
 // Non-CRUD hooks — kept hand-rolled because they have shape the factory
 // doesn't support (no `id` param, distinct return types, dedicated keys).

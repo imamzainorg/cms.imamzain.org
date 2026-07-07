@@ -14,7 +14,7 @@ const mockSub = {
 	email: "test@example.com",
 	is_active: true,
 	unsubscribed_at: null,
-	created_at: "2024-01-01T00:00:00Z",
+	subscribed_at: "2024-01-01T00:00:00Z",
 }
 
 const server = setupServer(

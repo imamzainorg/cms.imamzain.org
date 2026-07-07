@@ -48,7 +48,7 @@ export default function PapersPage() {
 	const handleDelete = async (id: string) => {
 		const ok = await confirm({
 			title: "حذف هذا البحث؟",
-			description: "سيُحذف البحث نهائياً مع كل ترجماته. لا يمكن التراجع.",
+			description: "سيُنقل البحث إلى سلة المهملات. يمكنك استعادته من صفحة المهملات.",
 			confirmText: "حذف",
 			tone: "danger",
 		})

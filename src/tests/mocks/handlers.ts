@@ -19,9 +19,10 @@ const mockUser = {
  * Individual tests override these via `server.use(...)` for specific scenarios.
  */
 export const handlers = [
-	// Auth
+	// Auth — the real endpoint returns refresh_token alongside accessToken
+	// (the auth store persists it for the rotation flow in src/lib/api.ts).
 	http.post(`${API}/auth/login`, () =>
-		HttpResponse.json(wrap({ accessToken: "test-token", user: mockUser })),
+		HttpResponse.json(wrap({ accessToken: "test-token", refresh_token: "test-refresh", user: mockUser })),
 	),
 	http.get(`${API}/auth/me`, () => HttpResponse.json(wrap(mockUser))),
 	http.patch(`${API}/auth/me/password`, () => HttpResponse.json(wrap({ message: "Password changed" }))),

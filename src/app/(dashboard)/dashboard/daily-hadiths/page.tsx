@@ -9,6 +9,7 @@ import { format } from "date-fns"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import Modal from "@/components/ui/Modal"
+import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { ListSkeleton } from "@/components/ui/Skeleton"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
@@ -33,12 +34,16 @@ type DialogState =
 export default function DailyHadithsPage() {
 	const { confirm, dialog: confirmDialog } = useConfirm()
 	const [dialog, setDialog] = useState<DialogState>(null)
+	const [page, setPage] = useState(1)
+	const [limit, setLimit] = useState(20)
 
-	const listQuery = useDailyHadithsList({ limit: 100 })
+	const listQuery = useDailyHadithsList({ page, limit })
 	const todayQuery = useTodayHadith()
 	const pinsQuery = useHadithPins()
 
 	const hadiths = listQuery.data?.items ?? []
+	const total = listQuery.data?.pagination.total ?? 0
+	const pages = listQuery.data?.pagination.pages ?? 1
 	const today = todayQuery.data
 	const pins = pinsQuery.data ?? []
 
@@ -167,6 +172,12 @@ export default function DailyHadithsPage() {
 				</div>
 			)}
 
+			<Pagination
+				page={page} pages={pages} total={total} limit={limit}
+				onPage={setPage}
+				onLimit={(n) => { setLimit(n); setPage(1) }}
+			/>
+
 			{dialog?.mode === "create" && (
 				<HadithEditor onClose={() => setDialog(null)} />
 			)}
@@ -189,6 +200,12 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 	const saving = createHadith.isPending || updateHadith.isPending
 
 	const [isActive, setIsActive] = useState(initial?.is_active ?? true)
+	// Languages already stored server-side. PATCH only UPSERTS the translations
+	// in the payload — it never deletes ones left out — so a persisted tab can't
+	// truly be removed from here, and dropping the default would break the
+	// single-default invariant (400). We therefore only allow removing tabs
+	// added in THIS session.
+	const persistedLangs = new Set(initial?.daily_hadith_translations.map((t) => t.lang) ?? [])
 	// On create, seed ar/en/fa tabs so the editor sees all expected languages
 	// up-front. Empty tabs are filtered out at submit time.
 	const seedTranslations = (): DailyHadithTranslation[] => {
@@ -242,7 +259,7 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 								className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeLang === t.lang ? "border-primary text-primary" : "border-transparent text-gray-500"}`}>
 								<Globe className="inline h-4 w-4 ml-1" />{languageLabel(t.lang)}
 								{t.is_default && <span className="mr-1 text-xs text-gray-400">(الافتراضية)</span>}
-								{translations.length > 1 && (
+								{translations.length > 1 && !persistedLangs.has(t.lang) && (
 									<span onClick={(e) => { e.stopPropagation(); removeLang(i) }} className="mr-2 text-gray-400 hover:text-red-500 cursor-pointer"><Trash2 className="inline h-3 w-3" /></span>
 								)}
 							</button>

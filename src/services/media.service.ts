@@ -1,3 +1,4 @@
+import axios from "axios"
 import { api } from "@/lib/api"
 import type { MediaRecord, PaginatedResponse } from "@/types"
 
@@ -6,6 +7,8 @@ import type { MediaRecord, PaginatedResponse } from "@/types"
  *
  * - `mediaId`: pinned at confirm-time; safe to use in optimistic UI and
  *   draft post `attachment_ids` before the upload completes.
+ * - `publicUrl`: the CDN URL the file will be served from once confirmed
+ *   (`<publicBaseUrl>/<key>`) — usable for optimistic previews.
  * - `maxBytes`: per-MIME upload cap (currently 25 MB for images). Validate
  *   client-side; otherwise R2 will accept the PUT and `/media/confirm`
  *   bounces it with 413.
@@ -13,6 +16,7 @@ import type { MediaRecord, PaginatedResponse } from "@/types"
 export type UploadUrlResponse = {
 	uploadUrl: string
 	key: string
+	publicUrl: string
 	mediaId: string
 	maxBytes: number
 }
@@ -44,6 +48,31 @@ export class MediaMimeNotAllowedError extends Error {
 		super(`نوع الملف غير مدعوم (${mimeType || "غير معروف"}). الأنواع المسموحة: JPEG, PNG, GIF, WebP.`)
 		this.name = "MediaMimeNotAllowedError"
 		this.mimeType = mimeType
+	}
+}
+
+/**
+ * HTTP 410 from POST /media/confirm — the pre-signed upload session expired
+ * (more than ~15 minutes elapsed between /media/upload-url and /media/confirm).
+ * The pending record is gone server-side; the only fix is to restart the
+ * upload from file selection.
+ */
+export class MediaUploadExpiredError extends Error {
+	constructor() {
+		super("انتهت صلاحية جلسة الرفع — أعد اختيار الملف وحاول مجددًا.")
+		this.name = "MediaUploadExpiredError"
+	}
+}
+
+/**
+ * The R2 PUT itself failed (expired signature, mismatched Content-Type…).
+ * A dedicated subclass (not a bare Error) so getErrorMessage surfaces the
+ * Arabic message instead of the caller's generic fallback.
+ */
+export class MediaUploadFailedError extends Error {
+	constructor() {
+		super("فشل رفع الملف إلى مخزن الملفات. حاول مجدداً.")
+		this.name = "MediaUploadFailedError"
 	}
 }
 
@@ -90,11 +119,17 @@ export const mediaService = {
 			throw new MediaSizeExceededError(urlData.maxBytes, file.type)
 		}
 
-		await fetch(urlData.uploadUrl, {
+		const putResp = await fetch(urlData.uploadUrl, {
 			method: "PUT",
 			body: file,
 			headers: { "Content-Type": file.type },
 		})
+		if (!putResp.ok) {
+			// R2 rejected the PUT (expired signature, mismatched Content-Type…).
+			// Fail here with a clear message instead of letting /media/confirm
+			// die on a missing object.
+			throw new MediaUploadFailedError()
+		}
 
 		const dimensions = await getImageDimensions(file)
 
@@ -102,13 +137,27 @@ export const mediaService = {
 		// sharp generation is queued on the next event-loop tick. Poll the
 		// detail endpoint until variants land (typically 1–3 s) so the UI
 		// doesn't briefly flash "no variants" + a regenerate prompt.
-		const { data: confirmed } = await mediaService.confirmUpload({
-			key: urlData.key,
-			filename: file.name,
-			mime_type: file.type,
-			file_size: file.size,
-			...dimensions,
-		})
+		let confirmed: MediaRecord
+		try {
+			const resp = await mediaService.confirmUpload({
+				key: urlData.key,
+				filename: file.name,
+				mime_type: file.type,
+				file_size: file.size,
+				...dimensions,
+			})
+			confirmed = resp.data
+		} catch (e) {
+			// 410 = pre-signed session expired (>15 min between upload-url and
+			// confirm); the pending record is gone — surface a typed domain error
+			// so the UI can prompt a fresh file selection. Everything else
+			// (incl. 413 PAYLOAD_TOO_LARGE, whose server string names the exact
+			// cap + MIME) rethrows untouched for getErrorMessage to render.
+			if (axios.isAxiosError(e) && e.response?.status === 410) {
+				throw new MediaUploadExpiredError()
+			}
+			throw e
+		}
 		return await pollForVariants(confirmed)
 	},
 }

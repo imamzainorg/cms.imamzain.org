@@ -14,7 +14,6 @@ import {
 	Search,
 	Globe,
 	Star,
-	Clock,
 	CheckSquare,
 	Square,
 	LayoutGrid,
@@ -54,7 +53,6 @@ export default function PostsPage() {
 		setSearch,
 		debouncedSearch,
 		selected,
-		setSelected,
 		toggleSelected,
 		clearSelected,
 		selectMany,
@@ -188,9 +186,6 @@ export default function PostsPage() {
 
 	const titleOf = (p: Post) =>
 		pickTranslation(p.post_translations, p.translation)?.title || "بدون عنوان"
-
-	const readingTimeOf = (p: Post) =>
-		pickTranslation(p.post_translations, p.translation)?.reading_time_minutes ?? 0
 
 	const hasFilters =
 		!!debouncedSearch || statusFilter !== "all" || !!categoryFilter || featuredOnly
@@ -413,9 +408,7 @@ export default function PostsPage() {
 					onDelete={handleDelete}
 					onTogglePublish={handleTogglePublish}
 					titleOf={titleOf}
-					readingTimeOf={readingTimeOf}
 					statusOf={statusOf}
-					statusVariant={statusVariant}
 				/>
 			)}
 
@@ -609,9 +602,7 @@ interface GridProps {
 	onDelete: (p: Post) => void
 	onTogglePublish: (p: Post) => void
 	titleOf: (p: Post) => string
-	readingTimeOf: (p: Post) => number
 	statusOf: (p: Post) => { kind: StatusKind; label: string }
-	statusVariant: Record<StatusKind, "success" | "info" | "default">
 }
 
 function CardGrid({
@@ -622,17 +613,16 @@ function CardGrid({
 	onDelete,
 	onTogglePublish,
 	titleOf,
-	readingTimeOf,
 	statusOf,
-	statusVariant,
 }: GridProps) {
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 			{posts.map((post) => {
-				const thumb = post.media?.url || null
+				// Cover image first; fall back to the first attachment thumbnail
+				// the slim list payload embeds (round 15.2).
+				const thumb = post.media?.url || post.post_attachments?.[0]?.media?.url || null
 				const isSel = selected.has(post.id)
 				const status = statusOf(post)
-				const minutes = readingTimeOf(post)
 				return (
 					<div
 						key={post.id}
@@ -712,15 +702,6 @@ function CardGrid({
 											{toArabicDigits(post.post_translations?.length ?? 1)}{" "}
 											{post.post_translations?.length === 1 ? "ترجمة" : "ترجمات"}
 										</span>
-										{minutes > 0 && (
-											<>
-												<span className="text-[hsl(var(--foreground-subtle))]">·</span>
-												<span className="inline-flex items-center gap-1 arabic-nums">
-													<Clock className="h-3 w-3" strokeWidth={1.6} />
-													{toArabicDigits(minutes)} د قراءة
-												</span>
-											</>
-										)}
 										<span className="text-[hsl(var(--foreground-subtle))]">·</span>
 										<span className="arabic-nums tabular-nums">
 											{toArabicDigits(safeFormat(post.created_at, "dd/MM/yyyy"))}

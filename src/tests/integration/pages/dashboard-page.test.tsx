@@ -33,10 +33,11 @@ function seedAuth() {
 const statsPayload = {
 	recent_window_days: 7,
 	posts: { total: 42, published: 30, drafts: 12, recent: 5 },
+	audios: { total: 21, published: 18, drafts: 3 },
 	library: { books: 13, academic_papers: 7, gallery_images: 88, media_assets: 200 },
 	users: { total: 9 },
 	newsletter: { active_subscribers: 100, inactive_subscribers: 10, recent_subscribers: 4 },
-	forms: { contact_new: 5, contact_recent: 11, proxy_visit_pending: 2, proxy_visit_recent: 3 },
+	forms: { contact_new: 5, contact_recent: 11, proxy_visit_pending: 2, proxy_visit_recent: 3, unsent_notifications: 0 },
 	contest: { attempts_recent: 50 },
 }
 

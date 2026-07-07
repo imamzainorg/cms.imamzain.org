@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
+import Link from "next/link"
 import type { Contact } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
@@ -8,6 +9,8 @@ import { safeFormat } from "@/lib/dates"
 import { buildWebmailComposeUrl } from "@/lib/webmail"
 import Badge from "@/components/ui/Badge"
 import RichTextEditor from "@/components/ui/RichTextEditor"
+import PageHeader from "@/components/layout/PageHeader"
+import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import {
 	Mail, MailOpen, AlertCircle, ShieldAlert, Search, Send, Trash2, Reply, Inbox, Archive,
@@ -47,17 +50,24 @@ export default function ContactsPage() {
 	const [filter, setFilter] = useState<Filter>("")
 	const [search, setSearch] = useState("")
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [page, setPage] = useState(1)
+	const [limit, setLimit] = useState(20)
 	const { confirm, dialog } = useConfirm()
 
 	const newCount = useContactCount({ status: "NEW" })
 	const respondedCount = useContactCount({ status: "RESPONDED" })
 	const spamCount = useContactCount({ status: "SPAM" })
 
+	// Server-side pagination + status filter — the folder tabs drive `?status=`
+	// and Pagination drives `?page=/&limit=` directly on GET /forms/contacts.
 	const contactsQuery = useContactsList({
 		status: filter || undefined,
-		limit: 100,
+		page,
+		limit,
 	})
 	const contacts = useMemo(() => contactsQuery.data?.items ?? [], [contactsQuery.data])
+	const total = contactsQuery.data?.pagination.total ?? 0
+	const pages = contactsQuery.data?.pagination.pages ?? 1
 	const loading = contactsQuery.isLoading
 
 	const updateContact = useUpdateContact()
@@ -82,8 +92,8 @@ export default function ContactsPage() {
 
 	const handleDelete = async (id: string) => {
 		const ok = await confirm({
-			title: "حذف هذه الرسالة نهائياً؟",
-			description: "لا يمكن استرجاع الرسالة بعد الحذف.",
+			title: "حذف هذه الرسالة؟",
+			description: "ستُنقل إلى سلة المهملات ويمكن استعادتها لاحقاً.",
 			confirmText: "حذف",
 			tone: "danger",
 		})
@@ -97,6 +107,10 @@ export default function ContactsPage() {
 		})
 	}
 
+	// Status filtering happens server-side; the refilter here only guards the
+	// brief `keepPreviousData` window where the previous tab's rows are still
+	// on screen. Search is client-side within the current page (the API has no
+	// `?search=` on contacts).
 	const filtered = useMemo(() => {
 		const byStatus = filter ? contacts.filter((c) => c.status === filter) : contacts
 		const q = search.trim().toLowerCase()
@@ -109,17 +123,31 @@ export default function ContactsPage() {
 	}, [contacts, search, filter])
 
 	const tabs: Array<{ key: Filter; label: string; icon: typeof Inbox; badge?: number }> = [
-		{ key: "", label: "صندوق الوارد", icon: Inbox, badge: (newCount.data ?? 0) + (respondedCount.data ?? 0) },
+		// Inbox ('') sends no status filter, so the API returns ALL statuses
+		// (incl. SPAM) — the badge must count all three to match the list.
+		{ key: "", label: "صندوق الوارد", icon: Inbox, badge: (newCount.data ?? 0) + (respondedCount.data ?? 0) + (spamCount.data ?? 0) },
 		{ key: "NEW", label: "جديدة", icon: AlertCircle, badge: newCount.data ?? 0 },
 		{ key: "RESPONDED", label: "تم الرد", icon: MailOpen, badge: respondedCount.data ?? 0 },
 		{ key: "SPAM", label: "مزعجة", icon: ShieldAlert, badge: spamCount.data ?? 0 },
 	]
 
 	return (
-		<div>
-			<h1 className="text-3xl font-bold text-gray-900 mb-6">رسائل التواصل</h1>
+		<div className="space-y-6">
+			<PageHeader
+				title="رسائل التواصل"
+				description="الرسائل الواردة من نموذج التواصل في الموقع."
+				icon={Mail}
+				actions={
+					<Link
+						href="/dashboard/contacts/trash"
+						className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm text-foreground border border-[hsl(var(--border-strong))] rounded-md hover:bg-surface-muted transition-colors"
+					>
+						<Trash2 className="h-4 w-4" strokeWidth={1.6} />سلة المهملات
+					</Link>
+				}
+			/>
 
-			<div className="bg-white border border-gray-200 rounded-xl overflow-hidden h-[calc(100vh-180px)] flex">
+			<div className="bg-white border border-gray-200 rounded-xl overflow-hidden h-[calc(100vh-320px)] min-h-[420px] flex">
 				{/* Sidebar: folders */}
 				<div className="w-56 border-l border-gray-200 bg-gray-50/50 flex flex-col">
 					<div className="p-3 space-y-1">
@@ -128,7 +156,7 @@ export default function ContactsPage() {
 							return (
 								<button
 									key={t.key}
-									onClick={() => { setFilter(t.key); setSelectedId(null) }}
+									onClick={() => { setFilter(t.key); setSelectedId(null); setPage(1) }}
 									className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${active ? "bg-primary text-white" : "text-gray-700 hover:bg-white"}`}
 								>
 									<span className="flex items-center gap-2">
@@ -215,6 +243,12 @@ export default function ContactsPage() {
 					)}
 				</div>
 			</div>
+
+			<Pagination
+				page={page} pages={pages} total={total} limit={limit}
+				onPage={setPage}
+				onLimit={(n) => { setLimit(n); setPage(1) }}
+			/>
 			{dialog}
 		</div>
 	)

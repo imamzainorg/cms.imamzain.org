@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Book } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit2, Trash2, Eye, BookOpen, Search } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, BookOpen, Search, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import EmptyState from "@/components/ui/EmptyState"
@@ -48,7 +48,7 @@ export default function BooksPage() {
 	const handleDelete = async (b: Book) => {
 		const ok = await confirm({
 			title: "حذف هذا الكتاب؟",
-			description: "سيُحذف الكتاب نهائياً مع كل ترجماته. لا يمكن التراجع.",
+			description: "سيُنقل الكتاب إلى سلة المهملات. يمكنك استعادته من صفحة المهملات.",
 			confirmText: "حذف",
 			tone: "danger",
 		})
@@ -134,6 +134,11 @@ export default function BooksPage() {
 										<div className="absolute bottom-1 left-1 flex items-center gap-1 text-white text-[10px] bg-black/40 backdrop-blur px-1.5 py-0.5 rounded-full">
 											<Eye className="h-2.5 w-2.5" />{book.views ?? 0}
 										</div>
+										{book.pdf_url && (
+											<div className="absolute bottom-1 right-1 flex items-center gap-1 text-white text-[10px] bg-primary/80 backdrop-blur px-1.5 py-0.5 rounded-full" title="ملف PDF متوفر">
+												<FileText className="h-2.5 w-2.5" />PDF
+											</div>
+										)}
 									</div>
 									<div className="mt-2 px-1">
 										<h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-primary">{titleOf(book)}</h3>

@@ -12,4 +12,9 @@ export const contactsService = {
 		api.patch<Contact>(`/forms/contacts/${id}`, body),
 
 	remove: (id: string) => api.delete(`/forms/contacts/${id}`),
+
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<Contact>>("/forms/contacts/trash", { params }),
+
+	restore: (id: string) => api.post<Contact>(`/forms/contacts/${id}/restore`),
 }

@@ -15,6 +15,7 @@ import { CardGridSkeleton } from "@/components/ui/Skeleton"
 import { useUploadMedia } from "@/lib/queries/media"
 import {
 	useGalleryList,
+	useGalleryImage,
 	useCreateGalleryItem,
 	useUpdateGalleryItem,
 	useDeleteGalleryItem,
@@ -24,7 +25,10 @@ import { useTranslationsField } from "@/lib/use-translations-field"
 
 export default function GalleryPage() {
 	const [search, setSearch] = useState("")
-	const [selected, setSelected] = useState<GalleryImage | null>(null)
+	// media_id of the image being edited — the dialog fetches the FULL record
+	// itself (list payloads are slim: translations drop `description`, so
+	// seeding the form from a list item would silently wipe descriptions on save).
+	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const { confirm, dialog } = useConfirm()
 
 	const galleryQuery = useGalleryList({ limit: 100 })
@@ -66,7 +70,7 @@ export default function GalleryPage() {
 		})
 		if (!ok) return
 		deleteGallery.mutate(mediaId, {
-			onSuccess: () => { toast.success("تم الحذف"); setSelected(null) },
+			onSuccess: () => { toast.success("تم الحذف"); setSelectedId(null) },
 			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
 		})
 	}
@@ -129,7 +133,7 @@ export default function GalleryPage() {
 				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
 					{filtered.map((image) => (
 						<button key={image.media_id}
-							onClick={() => setSelected(image)}
+							onClick={() => setSelectedId(image.media_id)}
 							className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden text-right hover:ring-2 hover:ring-primary cursor-pointer">
 							{image.media?.url ? (
 								<img src={image.media.url} alt={getTitle(image)} className="w-full h-full object-cover" />
@@ -144,13 +148,13 @@ export default function GalleryPage() {
 				</div>
 			)}
 
-			{selected && (
+			{selectedId && (
 				<GalleryImageDialog
-					image={selected}
+					mediaId={selectedId}
 					categories={categories}
-					onClose={() => setSelected(null)}
-					onSaved={() => setSelected(null)}
-					onDelete={() => handleDelete(selected.media_id)}
+					onClose={() => setSelectedId(null)}
+					onSaved={() => setSelectedId(null)}
+					onDelete={() => handleDelete(selectedId)}
 				/>
 			)}
 			{dialog}
@@ -159,6 +163,52 @@ export default function GalleryPage() {
 }
 
 function GalleryImageDialog({
+	mediaId,
+	categories,
+	onClose,
+	onSaved,
+	onDelete,
+}: {
+	mediaId: string
+	categories: GalleryCategory[]
+	onClose: () => void
+	onSaved: () => void
+	onDelete: () => void
+}) {
+	// The grid only has the SLIM list item (translations drop `description`).
+	// Fetch the full record before seeding the form — otherwise saving would
+	// silently wipe every stored description.
+	const detailQuery = useGalleryImage(mediaId)
+
+	if (!detailQuery.data) {
+		return (
+			<div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+				<div className="bg-white rounded-xl px-8 py-6 shadow-2xl flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+					{detailQuery.isError ? (
+						<p className="text-sm text-red-600">{getErrorMessage(detailQuery.error, "تعذّر تحميل بيانات الصورة")}</p>
+					) : (
+						<>
+							<Loader2 className="h-5 w-5 animate-spin text-primary" />
+							<p className="text-sm text-gray-600">جارٍ تحميل بيانات الصورة…</p>
+						</>
+					)}
+				</div>
+			</div>
+		)
+	}
+
+	return (
+		<GalleryImageDialogContent
+			image={detailQuery.data}
+			categories={categories}
+			onClose={onClose}
+			onSaved={onSaved}
+			onDelete={onDelete}
+		/>
+	)
+}
+
+function GalleryImageDialogContent({
 	image,
 	categories,
 	onClose,
@@ -213,7 +263,8 @@ function GalleryImageDialog({
 			{
 				id: image.media_id,
 				body: {
-					category_id: categoryId || undefined,
+					// null disconnects the category ("— بدون —"); undefined would keep it.
+				category_id: categoryId || null,
 					author: author || undefined,
 					taken_at: takenAt ? new Date(takenAt).toISOString() : undefined,
 					tags,

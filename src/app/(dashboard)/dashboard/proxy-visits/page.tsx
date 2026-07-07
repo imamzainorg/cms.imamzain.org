@@ -1,16 +1,21 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import type { ProxyVisit } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
-import { Loader2, Users, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Loader2, Users, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/Skeleton"
 import FilterPills from "@/components/ui/FilterPills"
+import PageHeader from "@/components/layout/PageHeader"
+import Pagination from "@/components/ui/Pagination"
+import { useConfirm } from "@/components/ui/ConfirmDialog"
 import {
 	useProxyVisitsList,
 	useUpdateProxyVisit,
+	useDeleteProxyVisit,
 } from "@/lib/queries/proxy-visits"
 
 export default function ProxyVisitsPage() {
@@ -18,8 +23,16 @@ export default function ProxyVisitsPage() {
 	const [statusFilter, setStatusFilter] = useState<
 		"" | "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
 	>("")
+	const [page, setPage] = useState(1)
+	const [limit, setLimit] = useState(20)
 
-	const listQuery = useProxyVisitsList({ status: statusFilter || undefined })
+	// Server-side pagination + status filter — the pills drive `?status=` and
+	// Pagination drives `?page=/&limit=` directly on GET /forms/proxy-visits.
+	const listQuery = useProxyVisitsList({
+		status: statusFilter || undefined,
+		page,
+		limit,
+	})
 	const rawVisits = listQuery.data?.items ?? []
 	// `keepPreviousData` from the query layer keeps the previous filter's rows on
 	// screen while the new filter's query is in flight. Without this client-side
@@ -28,10 +41,14 @@ export default function ProxyVisitsPage() {
 	const visits = statusFilter
 		? rawVisits.filter((v) => v.status === statusFilter)
 		: rawVisits
+	const total = listQuery.data?.pagination.total ?? 0
+	const pages = listQuery.data?.pagination.pages ?? 1
 	const isLoading = listQuery.isLoading
 	const isFetching = listQuery.isFetching
 
 	const updateVisit = useUpdateProxyVisit()
+	const deleteVisit = useDeleteProxyVisit()
+	const { confirm, dialog } = useConfirm()
 
 	const updateStatus = (id: string, status: ProxyVisit["status"]) => {
 		updateVisit.mutate(
@@ -45,6 +62,23 @@ export default function ProxyVisitsPage() {
 					toast.error(getErrorMessage(e, "فشل تحديث الحالة")),
 			},
 		)
+	}
+
+	const handleDelete = async (v: ProxyVisit) => {
+		const ok = await confirm({
+			title: `حذف طلب "${v.name}"؟`,
+			description: "سيُنقل إلى سلة المهملات ويمكن استعادته لاحقاً.",
+			confirmText: "حذف",
+			tone: "danger",
+		})
+		if (!ok) return
+		deleteVisit.mutate(v.id, {
+			onSuccess: () => {
+				toast.success("تم الحذف")
+				setSelected(null)
+			},
+			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
+		})
 	}
 
 	const statusClass = (s: ProxyVisit["status"]) =>
@@ -84,15 +118,25 @@ export default function ProxyVisitsPage() {
 		: "لا توجد طلبات"
 
 	return (
-		<div>
-			<h1 className="text-3xl font-bold text-gray-900 mb-6">
-				طلبات الزيارة بالإنابة
-			</h1>
+		<div className="space-y-6">
+			<PageHeader
+				title="طلبات الزيارة بالإنابة"
+				description="طلبات الزيارة الواردة من الموقع — الموافقة والإكمال يُخطران الزائر تلقائياً."
+				icon={Users}
+				actions={
+					<Link
+						href="/dashboard/proxy-visits/trash"
+						className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm text-foreground border border-[hsl(var(--border-strong))] rounded-md hover:bg-surface-muted transition-colors"
+					>
+						<Trash2 className="h-4 w-4" strokeWidth={1.6} />سلة المهملات
+					</Link>
+				}
+			/>
 
-			<div className="flex gap-2 mb-4 flex-wrap items-center">
+			<div className="flex gap-2 flex-wrap items-center">
 				<FilterPills
 					value={statusFilter}
-					onChange={(v) => { setStatusFilter(v); setSelected(null) }}
+					onChange={(v) => { setStatusFilter(v); setSelected(null); setPage(1) }}
 					options={[
 						{ value: "", label: filterLabels[""] },
 						{ value: "PENDING", label: filterLabels.PENDING },
@@ -251,10 +295,23 @@ export default function ProxyVisitsPage() {
 									تحديد كـ &quot;مكتمل&quot;
 								</button>
 							)}
+							<button
+								onClick={() => handleDelete(selected)}
+								className="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50"
+							>
+								<Trash2 className="h-4 w-4" />حذف الطلب
+							</button>
 						</div>
 					</div>
 				)}
 			</div>
+
+			<Pagination
+				page={page} pages={pages} total={total} limit={limit}
+				onPage={setPage}
+				onLimit={(n) => { setLimit(n); setPage(1) }}
+			/>
+			{dialog}
 		</div>
 	)
 }

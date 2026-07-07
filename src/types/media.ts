@@ -5,6 +5,15 @@ export type MediaVariant = {
 	format: "webp"
 }
 
+/**
+ * Slim variant shape embedded on content payloads (posts, books, gallery …) —
+ * the API's MEDIA_VARIANT_SELECT: { id, width, url, format }. Unlike the full
+ * rows the /media endpoints return, there is no `file_size`.
+ */
+export type EmbeddedMediaVariant = Pick<MediaVariant, "width" | "url" | "format"> & {
+	id?: string
+}
+
 export type MediaRecord = {
 	id: string
 	filename: string
@@ -34,5 +43,9 @@ export type EmbeddedMedia = {
 	width?: number | null
 	height?: number | null
 	created_at?: string
-	variants?: MediaVariant[]
+	/**
+	 * On content payloads (posts, books, …) the API keeps the Prisma relation
+	 * name `media_variants` — only the /media endpoints remap to `variants`.
+	 */
+	media_variants?: EmbeddedMediaVariant[]
 }

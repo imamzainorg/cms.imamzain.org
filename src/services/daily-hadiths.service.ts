@@ -35,6 +35,12 @@ export const dailyHadithsService = {
 
 	remove: (id: string) => api.delete(`/daily-hadiths/${id}`),
 
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<DailyHadith>>("/daily-hadiths/trash", { params }),
+
+	// Unlike most resources, restore here returns { message } — not the entity.
+	restore: (id: string) => api.post<{ message: string }>(`/daily-hadiths/${id}/restore`),
+
 	listPins: () => api.get<DailyHadithPin[]>("/daily-hadiths/pins"),
 
 	pin: (body: { pin_date: string; hadith_id: string }) =>

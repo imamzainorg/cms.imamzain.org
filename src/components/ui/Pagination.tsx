@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { formatArNumber, toArabicDigits } from "@/lib/dates"
 
@@ -30,6 +31,15 @@ export default function Pagination({
 	onPage,
 	onLimit,
 }: Props) {
+	// Clamp an out-of-range page back into bounds. Without this, deleting /
+	// restoring the last row on the last page leaves `page` pointing past the
+	// (now smaller) page count, so the list refetches an empty page and looks
+	// deceptively "empty". Runs before the total===0 early-return so the Rules
+	// of Hooks hold.
+	useEffect(() => {
+		if (total > 0 && pages >= 1 && page > pages) onPage(pages)
+	}, [page, pages, total, onPage])
+
 	if (total === 0) return null
 	const fromIdx = (page - 1) * limit + 1
 	const toIdx = Math.min(page * limit, total)

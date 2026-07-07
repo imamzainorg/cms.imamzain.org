@@ -27,25 +27,59 @@ afterEach(() => { server.resetHandlers(); resetNavigationMocks() })
 afterAll(() => server.close())
 
 describe("ContactsPage", () => {
-	it("renders the inbox with NEW count badge derived client-side", async () => {
-		// `?status=` is stripped on the way out (backend's ValidationPipe rejects
-		// non-whitelisted params); the page derives badge counts from the items.
+	it("renders the inbox with count badges from server-side ?status= totals", async () => {
+		// `ContactQueryDto` whitelists `?status=` now — the page fires one
+		// `limit=1` count query per status and reads `pagination.total`;
+		// the visible list itself is fetched WITHOUT client-side filtering.
 		const items = [
 			{ ...contact },
 			{ ...contact, id: "c2", name: "علي ثاني" },
 			{ ...contact, id: "c3", name: "علي ثالث" },
 			{ ...contact, id: "c4", name: "مردود", status: "RESPONDED" as const },
 		]
+		const countRequests: Array<{ status: string | null; limit: string | null }> = []
 		server.use(http.get(`${API}/forms/contacts`, ({ request }) => {
-			const status = new URL(request.url).searchParams.get("status")
-			// Anything that passes `status=` would be a regression — the API would 400.
+			const url = new URL(request.url)
+			const status = url.searchParams.get("status")
+			const limit = url.searchParams.get("limit")
+			if (limit === "1") {
+				// Count probe — the server filters, the client only reads `total`.
+				countRequests.push({ status, limit })
+				const totals: Record<string, number> = { NEW: 3, RESPONDED: 1, SPAM: 0 }
+				return HttpResponse.json(wrap(paginated([], { total: totals[status ?? ""] ?? 0 })))
+			}
+			// Main list request — server-side pagination, all statuses (no filter tab).
 			expect(status).toBeNull()
 			return HttpResponse.json(wrap(paginated(items)))
 		}))
 		renderWithQueryClient(<ContactsPage />)
 		await waitFor(() => expect(screen.getByText("علي محمد")).toBeInTheDocument())
-		// NEW counter badge shows 3 (3 of 4 items are NEW)
+		// NEW badge = server total for status=NEW; inbox badge = NEW + RESPONDED.
 		await waitFor(() => expect(screen.getByText("3")).toBeInTheDocument())
+		expect(screen.getByText("4")).toBeInTheDocument()
+		// Each count probe passed its status through to the server.
+		await waitFor(() => {
+			expect(new Set(countRequests.map((r) => r.status))).toEqual(new Set(["NEW", "RESPONDED", "SPAM"]))
+		})
+	})
+
+	it("clicking a folder tab sends ?status= to the server for the list", async () => {
+		const listStatuses: Array<string | null> = []
+		server.use(http.get(`${API}/forms/contacts`, ({ request }) => {
+			const url = new URL(request.url)
+			if (url.searchParams.get("limit") === "1") {
+				return HttpResponse.json(wrap(paginated([], { total: 0 })))
+			}
+			listStatuses.push(url.searchParams.get("status"))
+			return HttpResponse.json(wrap(paginated([contact])))
+		}))
+		renderWithQueryClient(<ContactsPage />)
+		await waitFor(() => expect(screen.getByText("علي محمد")).toBeInTheDocument())
+		expect(listStatuses[listStatuses.length - 1]).toBeNull()
+
+		// The "جديدة" folder tab drives the server-side filter.
+		await act(async () => { fireEvent.click(screen.getByText("جديدة")) })
+		await waitFor(() => expect(listStatuses[listStatuses.length - 1]).toBe("NEW"))
 	})
 
 	it("shows an 'empty inbox' message when filter has no contacts", async () => {

@@ -1,4 +1,5 @@
 import type { CategoryTranslation } from "./categories"
+import type { EmbeddedMediaVariant } from "./media"
 
 export type GalleryImageTranslationItem = {
 	lang: string
@@ -9,9 +10,18 @@ export type GalleryImageTranslationItem = {
 export type GalleryMedia = {
 	id: string
 	url: string
+	filename?: string
+	alt_text?: string | null
 	mime_type: string
 	width: number | null
 	height: number | null
+	/**
+	 * srcset-ready WebP variants. NOTE: on the gallery wire the field keeps the
+	 * Prisma relation name `media_variants` (the API embeds media via
+	 * PUBLIC_MEDIA_SELECT / an include without renaming) — unlike the /media
+	 * endpoints, which remap to `variants`.
+	 */
+	media_variants?: EmbeddedMediaVariant[]
 }
 
 export type GalleryImage = {

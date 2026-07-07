@@ -1,8 +1,8 @@
 # cms.imamzain.org
 
-Admin CMS for [imamzain.org](https://imamzain.org) — Islamic content management, digital library, gallery, forms, and contest administration.
+Admin CMS for [imamzain.org](https://imamzain.org) — Islamic content management, digital library, gallery, audio library, forms, and contest administration.
 
-Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, and **Zustand**.
+Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, **TanStack Query**, and **Zustand**.
 
 ---
 
@@ -13,8 +13,10 @@ Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, and 
 | Framework | Next.js 16.1 (App Router, Turbopack) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 4 + CSS variables |
-| State | Zustand 5 |
+| Server state | TanStack Query 5 (`src/lib/queries/`) |
+| Client state | Zustand 5 (auth store) |
 | Forms | React Hook Form 7 + Zod 4 |
+| Rich text | TipTap 3 |
 | HTTP | Axios 1 |
 | Dates | date-fns 4 |
 | Icons | Lucide React |
@@ -26,7 +28,7 @@ Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, and 
 ## Prerequisites
 
 - **Node.js** ≥ 18 or **Bun** ≥ 1.3
-- The backend API running locally (default: `http://localhost:3002`)
+- The backend API running locally (default: `http://localhost:3000/api/v1`)
 
 ---
 
@@ -36,20 +38,20 @@ Built with **Next.js 16** (App Router), **TypeScript**, **Tailwind CSS 4**, and 
 # Install dependencies
 bun install
 
-# Start the dev server (runs on port 3001, leaving 3000 for the API)
+# Start the dev server (runs on port 3002, leaving 3000 for the API)
 bun dev
 
 # Open in browser
-open http://localhost:3001
+open http://localhost:3002
 ```
 
 ---
 
 ## Environment variables
 
-| Variable | Dev default | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:3000/api/v1` | Backend API base URL |
+| Variable | Dev default (`.env.local.example`) | Production (`.env.production`) | Purpose |
+|---|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:3000/api/v1` | `https://api.imamzain.org/api/v1` | Backend API base URL |
 
 Create a `.env.local` file at the project root (already gitignored) to override values locally.
 
@@ -60,75 +62,97 @@ Create a `.env.local` file at the project root (already gitignored) to override 
 ```
 src/
 ├── app/
-│   ├── (auth)/login/           Login page
+│   ├── (auth)/login/               Login page
 │   ├── (dashboard)/
-│   │   ├── layout.tsx          Dashboard shell (auth gate)
+│   │   ├── layout.tsx              Dashboard shell (auth gate)
 │   │   └── dashboard/
-│   │       ├── page.tsx        Overview / stat cards
-│   │       ├── posts/          Posts CRUD
-│   │       ├── books/          Books CRUD
-│   │       ├── papers/         Academic papers CRUD
-│   │       ├── gallery/        Image gallery (upload → gallery)
-│   │       ├── media/          Raw media library
-│   │       ├── contacts/       Contact form submissions
-│   │       ├── proxy-visits/   Proxy visit requests
-│   │       ├── newsletter/     Newsletter subscribers
-│   │       ├── contest/        Contest attempt review
-│   │       ├── users/          Admin user management
-│   │       ├── roles/          Role & permission matrix
-│   │       ├── languages/      Supported languages
-│   │       ├── audit-logs/     Audit log viewer
-│   │       └── settings/       Password change
+│   │       ├── page.tsx            Overview / stat cards
+│   │       ├── posts/              Posts CRUD (+ trash)
+│   │       ├── post-categories/    Category managers ×4, each with trash
+│   │       ├── book-categories/    (posts / books / papers / gallery)
+│   │       ├── paper-categories/
+│   │       ├── gallery-categories/
+│   │       ├── books/              Books library (+ trash)
+│   │       ├── papers/             Academic papers (+ trash)
+│   │       ├── gallery/            Image gallery (+ trash)
+│   │       ├── audios/             Audio library (+ trash)
+│   │       ├── speakers/           Audio speakers/lecturers (+ trash)
+│   │       ├── static-pages/       Static pages CRUD (+ trash)
+│   │       ├── stores/             Sale points (منافذ البيع) (+ trash)
+│   │       ├── media/              Raw media library
+│   │       ├── daily-hadiths/      Daily hadiths (+ trash)
+│   │       ├── contacts/           Contact form inbox (+ trash)
+│   │       ├── proxy-visits/       Proxy visit requests (+ trash)
+│   │       ├── newsletter/         Subscribers (+ trash)
+│   │       ├── campaigns/          Newsletter campaigns
+│   │       ├── contest/            Contest attempt review
+│   │       ├── users/              Admin user management (+ trash)
+│   │       ├── roles/              Role & permission matrix
+│   │       ├── languages/          Supported languages
+│   │       ├── settings/           Site settings (key/value with typed values)
+│   │       ├── audit-logs/         Audit log viewer
+│   │       └── profile/            Own account + password change
 │   ├── error.tsx / global-error.tsx / loading.tsx / not-found.tsx
-│   └── page.tsx                Redirects / → /dashboard
+│   └── page.tsx                    Redirects / → /dashboard
 │
 ├── components/
-│   ├── layout/                 Sidebar, Header, ClientOnly
-│   ├── posts/PostForm.tsx
-│   ├── books/BookForm.tsx
-│   ├── papers/PaperForm.tsx
-│   └── ui/                     Button, Input, Card, Badge
+│   ├── layout/                     Sidebar (permission-gated nav), Header, ClientOnly
+│   ├── posts/ books/ papers/       Resource forms
+│   ├── audios/ static-pages/       Resource forms (audio upload, page editor)
+│   ├── categories/ campaigns/      Shared managers
+│   ├── forms/ trash/ audit/        Shared page building blocks
+│   ├── providers/                  React Query provider
+│   └── ui/                         Button, Input, Card, Badge, dialogs, …
 │
-├── services/                   All API calls, one file per resource
-│   ├── posts.service.ts
-│   ├── books.service.ts
-│   ├── papers.service.ts
-│   ├── media.service.ts        Two-step R2 upload helper
-│   ├── gallery.service.ts
-│   ├── contacts.service.ts
-│   ├── proxy-visits.service.ts
-│   ├── newsletter.service.ts
-│   ├── users.service.ts
-│   ├── roles.service.ts
-│   ├── languages.service.ts
-│   ├── audit-logs.service.ts
-│   └── contest.service.ts
+├── services/                       All API calls, one file per resource
+│                                   (posts, books, papers, gallery, audios,
+│                                   speakers, static-pages, stores, media,
+│                                   daily-hadiths, contacts, proxy-visits,
+│                                   newsletter, campaigns, contest, users,
+│                                   roles, languages, settings, audit-logs, …)
 │
-├── store/auth.ts               Zustand auth store (login/logout/checkAuth)
-├── types/index.ts              All TypeScript types (snake_case, API-aligned)
-└── lib/api.ts                  Axios instance with JWT interceptor
+├── lib/
+│   ├── api.ts                      Axios instance: JWT + refresh rotation,
+│   │                               envelope unwrapping, Arabic error mapping
+│   ├── queries/                    TanStack Query hooks (keys.ts, factory.ts,
+│   │                               one file per resource)
+│   ├── audio-meta.ts               Client-side audio duration/peaks extraction
+│   └── sanitize.ts / i18n.ts / …   Shared helpers
+│
+├── store/auth.ts                   Zustand auth store (login/logout/checkAuth)
+└── types/                          TypeScript types, one file per resource
+                                    (snake_case, API-aligned)
 ```
 
 ---
 
 ## API alignment
 
-The CMS consumes the imamzain.org REST API at `/api/v1/...`. Key design decisions:
+The CMS consumes the imamzain.org REST API at `/api/v1/...`. Full reference: [https://api.imamzain.org/docs](https://api.imamzain.org/docs) and the API repo's `docs/` (`integration.md`, `permissions.md`, `CMS-INTEGRATION-NOTES.md`). Key design decisions:
 
-- **Auth** uses `username` + `password` (not email). JWT stored in `localStorage`.
+- **Auth** uses `username` + `password` (not email). JWT access + refresh tokens stored in `localStorage`.
+- **Response envelopes**: success responses arrive as `{ success, data }` — the axios interceptor unwraps `data` transparently. Error envelopes carry a stable machine `code` that the client maps to Arabic messages (`getErrorMessage` in `src/lib/api.ts`); unrecognized codes fall back to the server's human-readable string.
+- **Slim list translations**: list endpoints drop heavy translation fields (`body` / `description` / `abstract`) — detail endpoints return full data, so the CMS fetches the detail record before opening an edit form.
 - **Admin post listing** uses `GET /posts/admin` to include unpublished drafts.
-- **Media upload** is a two-step flow: `POST /media/upload-url` → PUT to R2 → `POST /media/confirm`.
+- **Media upload** is a presigned two-step flow: `POST /media/upload-url` → PUT to R2 → `POST /media/confirm`. WebP variants are generated in the background; the client polls `GET /media/:id` until they appear.
+- **Audio upload** is a presigned PUT with **no confirm step** — duration and waveform peaks are extracted client-side (`src/lib/audio-meta.ts`) and sent with the create/update payload.
+- **Books & papers PDFs** are external URLs — PDFs are not uploaded through `/media`.
 - **Gallery images** are separate records linked to media via `media_id`.
-- **Contacts & proxy visits** live under `GET /forms/contacts` and `GET /forms/proxy-visits`.
+- **Contacts & proxy visits** live under `GET /forms/contacts` and `GET /forms/proxy-visits`, with server-side status filtering and soft-delete trash.
 - **Newsletter toggle** uses `POST /newsletter/subscribe` or `POST /newsletter/unsubscribe` by email.
 - All write operations use `PATCH` (not `PUT`), matching the API spec.
-- All field names are **snake_case** throughout (matching API responses directly).
+- All field names are **snake_case** throughout (matching API responses directly; the presigned upload-url responses are the one camelCase exception).
+- Requests default to `Accept-Language: ar` so translated fields resolve against Arabic.
 
 ---
 
 ## Authentication
 
-Protected routes require a valid JWT stored in `localStorage` under the key `accessToken`. On a 401 response the token is cleared and the user is redirected to `/login`. There is no refresh-token flow — re-login is required on expiry.
+Protected routes require a valid JWT stored in `localStorage` (`accessToken` / `refreshToken`). Token handling lives in `src/lib/api.ts`:
+
+- On a 401, the client runs a **single-flight refresh** (`POST /auth/refresh`): concurrent 401s queue behind one refresh and replay with the new access token once it resolves.
+- Refresh tokens **rotate** on every use. In multi-tab scenarios, losing the rotation race returns `AUTH_REFRESH_ALREADY_ROTATED` — the client re-reads the newer token another tab stored and retries once before giving up.
+- A 401 on the refresh itself (invalid / reused / account disabled) wipes both tokens and redirects to `/login`. Transient network/5xx errors during refresh keep the tokens intact so a later request can recover.
 
 ---
 
@@ -150,17 +174,12 @@ Tests use **Vitest** with **MSW** for request mocking — no real network calls 
 ```
 src/tests/
 ├── setup.ts                    jest-dom + MSW global setup
-├── mocks/
-│   ├── handlers.ts             Default MSW request handlers
-│   └── server.ts               MSW node server
-├── unit/
-│   ├── auth.store.test.ts
-│   ├── posts.service.test.ts
-│   ├── newsletter.service.test.ts
-│   └── contacts.service.test.ts
-└── integration/
-    ├── books-papers.test.ts
-    └── media-upload.test.ts
+├── utils.tsx                   Render helpers (React Query wrapper)
+├── mocks/                      MSW handlers, node server, next-navigation stub
+├── unit/                       api client, auth store, services, query hooks,
+│                               shared components (Pagination, ConfirmDialog, …)
+└── integration/                Page-level flows (posts, contacts, newsletter,
+                                roles, dashboard, media upload, MediaPicker)
 ```
 
 ---
@@ -169,7 +188,7 @@ src/tests/
 
 | Script | Description |
 |---|---|
-| `bun dev` | Start dev server on port 3001 |
+| `bun dev` | Start dev server on port 3002 |
 | `bun run build` | Production build |
 | `bun run start` | Serve production build |
 | `bun run test` | Run all tests once |
@@ -181,20 +200,27 @@ src/tests/
 
 ## CMS pages quick reference
 
-| Path | Purpose | Permission required |
-|---|---|---|
-| `/dashboard` | Stats overview | authenticated |
-| `/dashboard/posts` | Posts list + publish toggle | `posts:read` |
-| `/dashboard/books` | Books library | `books:read` |
-| `/dashboard/papers` | Academic papers | `academic-papers:read` |
-| `/dashboard/gallery` | Image gallery with upload | `gallery:*` |
-| `/dashboard/media` | Raw media file library | `media:read` |
-| `/dashboard/contacts` | Contact form inbox | `forms:read` |
-| `/dashboard/proxy-visits` | Proxy visit workflow | `forms:read` |
-| `/dashboard/newsletter` | Subscriber list + CSV export | `newsletter:read` |
-| `/dashboard/contest` | Contest attempt scores | `contest:read` |
-| `/dashboard/users` | Admin user & role management | `users:read` |
-| `/dashboard/roles` | Role & permission matrix | `roles:read` |
-| `/dashboard/languages` | Supported language codes | `languages:read` |
-| `/dashboard/audit-logs` | Filterable audit trail | `audit-logs:read` |
-| `/dashboard/settings` | Change own password | authenticated |
+Sidebar items are **permission-gated** (`src/components/layout/Sidebar.tsx`): an item is hidden unless the user's `permissions[]` contains at least one of the item's declared permission strings. The nav fails open while permissions are still loading, and the API enforces permissions server-side regardless.
+
+| Path | Sidebar label | Purpose | Shown when user holds any of |
+|---|---|---|---|
+| `/dashboard` | لوحة التحكم | Stats overview | always (authenticated) |
+| `/dashboard/posts` (+ `post-categories`, trash) | المقالات | Posts list + publish toggle | `posts:read/create/update/delete` |
+| `/dashboard/books` (+ `book-categories`, trash) | المكتبة | Books library | `books:create/update/delete` |
+| `/dashboard/papers` (+ `paper-categories`, trash) | الأبحاث | Academic papers | `academic-papers:create/update/delete` |
+| `/dashboard/gallery` (+ `gallery-categories`, trash) | معرض الصور | Image gallery with upload | `gallery:create/update/delete` |
+| `/dashboard/audios` (+ `speakers`, trash) | الصوتيات | Audio library + speakers | `audios:read/create/update/delete` |
+| `/dashboard/static-pages` (+ trash) | الصفحات الثابتة | Static pages | `static-pages:read/create/update/delete` |
+| `/dashboard/stores` (+ trash) | منافذ البيع | Sale points | `stores:create/update/delete` |
+| `/dashboard/media` | مكتبة الوسائط | Raw media file library | `media:read/create/update/delete` |
+| `/dashboard/daily-hadiths` (+ trash) | الأحاديث اليومية | Daily hadiths | `daily-hadiths:read/create/update/delete` |
+| `/dashboard/contacts` (+ trash) | رسائل التواصل | Contact form inbox (status filter) | `forms:read` |
+| `/dashboard/proxy-visits` (+ trash) | طلبات الزيارة | Proxy visit workflow (status filter) | `forms:read` |
+| `/dashboard/newsletter` (+ `campaigns`, trash) | النشرة البريدية | Subscribers + CSV export + campaigns | `newsletter:read` |
+| `/dashboard/contest` | المسابقات | Contest attempt scores | `contest:read` |
+| `/dashboard/users` (+ trash) | المستخدمون | Admin user & role management | `users:read` |
+| `/dashboard/roles` | الأدوار والصلاحيات | Role & permission matrix | `roles:read` |
+| `/dashboard/languages` | اللغات | Supported language codes | `languages:read` |
+| `/dashboard/settings` | إعدادات الموقع | Site settings (key/value, typed values) | `settings:read` |
+| `/dashboard/audit-logs` | سجلات التدقيق | Filterable audit trail | `audit-logs:read` |
+| `/dashboard/profile` | حسابي | Own account + password change | always (authenticated) |

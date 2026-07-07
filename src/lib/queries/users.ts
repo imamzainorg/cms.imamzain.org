@@ -53,6 +53,26 @@ export function useDeleteUser() {
 		mutationFn: (id: string) => usersService.remove(id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.users.lists() })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
+		},
+	})
+}
+
+export function useUsersTrash(params: { page?: number; limit?: number } = {}) {
+	return useQuery({
+		queryKey: queryKeys.trash.resource("users", params),
+		queryFn: async () => (await usersService.trash(params)).data,
+		placeholderData: keepPreviousData,
+	})
+}
+
+export function useRestoreUser() {
+	const qc = useQueryClient()
+	return useMutation({
+		mutationFn: (id: string) => usersService.restore(id),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.users.lists() })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
 		},
 	})
 }

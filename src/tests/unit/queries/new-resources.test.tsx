@@ -45,10 +45,11 @@ describe("useDashboardStats", () => {
 			return HttpResponse.json(wrap({
 				recent_window_days: 7,
 				posts: { total: 10, published: 6, drafts: 4, recent: 1 },
+				audios: { total: 2, published: 1, drafts: 1 },
 				library: { books: 1, academic_papers: 1, gallery_images: 1, media_assets: 1 },
 				users: { total: 1 },
 				newsletter: { active_subscribers: 1, inactive_subscribers: 0, recent_subscribers: 0 },
-				forms: { contact_new: 0, contact_recent: 0, proxy_visit_pending: 0, proxy_visit_recent: 0 },
+				forms: { contact_new: 0, contact_recent: 0, proxy_visit_pending: 0, proxy_visit_recent: 0, unsent_notifications: 0 },
 				contest: { attempts_recent: 0 },
 			}))
 		}))

@@ -16,6 +16,8 @@ import { buildQueryClient, wrap, paginated } from "../../utils"
 
 const API = "http://localhost:3000/api/v1"
 
+// LIST payloads are slim: translations carry no `body` and the server pins
+// reading_time_minutes to 0 (body not fetched on list queries).
 const mockPost: Post = {
 	id: "p1",
 	category_id: "c1",
@@ -27,12 +29,21 @@ const mockPost: Post = {
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
 	post_translations: [
-		{ lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
+		{ lang: "ar", title: "عنوان", summary: null, slug: "title", is_default: true, reading_time_minutes: 0 },
 	],
-	translation: { lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
+	translation: { lang: "ar", title: "عنوان", summary: null, slug: "title", is_default: true, reading_time_minutes: 0 },
 	post_categories: { id: "c1", created_at: "2024-01-01", post_category_translations: [] },
 	media: null,
 	post_attachments: [],
+}
+
+// DETAIL payloads keep `body` + the derived read time.
+const mockPostDetail: Post = {
+	...mockPost,
+	post_translations: [
+		{ lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
+	],
+	translation: { lang: "ar", title: "عنوان", summary: null, body: "x", slug: "title", is_default: true, reading_time_minutes: 1 },
 }
 
 const server = setupServer()
@@ -94,12 +105,14 @@ describe("usePost", () => {
 		expect(called).toBe(false)
 	})
 
-	it("fetches a single post by id", async () => {
-		server.use(http.get(`${API}/posts/admin/p1`, () => HttpResponse.json(wrap(mockPost))))
+	it("fetches a single post by id — detail keeps body + derived reading time", async () => {
+		server.use(http.get(`${API}/posts/admin/p1`, () => HttpResponse.json(wrap(mockPostDetail))))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => usePost("p1"), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
 		expect(result.current.data?.id).toBe("p1")
+		expect(result.current.data?.translation?.body).toBe("x")
+		expect(result.current.data?.translation?.reading_time_minutes).toBe(1)
 	})
 })
 

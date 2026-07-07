@@ -90,22 +90,19 @@ describe("newsletter hooks", () => {
 })
 
 describe("contacts hooks", () => {
-	it("useContactCount filters client-side (backend rejects ?status= as non-whitelisted)", async () => {
-		let capturedStatus: string | null = null
-		const items = [
-			{ id: "1", name: "a", email: "a@x", message: "", status: "NEW" },
-			{ id: "2", name: "b", email: "b@x", message: "", status: "NEW" },
-			{ id: "3", name: "c", email: "c@x", message: "", status: "RESPONDED" },
-		]
+	it("useContactCount sends ?status= to the server and returns pagination.total", async () => {
+		// `ContactQueryDto` whitelists `?status=` now — the count is a `limit=1`
+		// probe that reads the server-filtered `pagination.total` directly.
+		let captured: URL | null = null
 		server.use(http.get(`${API}/forms/contacts`, ({ request }) => {
-			capturedStatus = new URL(request.url).searchParams.get("status")
-			return HttpResponse.json(wrap(paginated(items, { total: items.length })))
+			captured = new URL(request.url)
+			return HttpResponse.json(wrap(paginated([], { total: 2 })))
 		}))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useContactCount({ status: "NEW" }), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
-		// Must NOT send status — backend would reject as non-whitelisted.
-		expect(capturedStatus).toBeNull()
+		expect(captured!.searchParams.get("status")).toBe("NEW")
+		expect(captured!.searchParams.get("limit")).toBe("1")
 		expect(result.current.data).toBe(2)
 	})
 
@@ -120,7 +117,7 @@ describe("contacts hooks", () => {
 			}),
 		)
 		const client = buildQueryClient()
-		const { result: list } = renderHook(() => useContactsList({ limit: 100 }), { wrapper: wrapped(client) })
+		const { result: list } = renderHook(() => useContactsList({ page: 1, limit: 20 }), { wrapper: wrapped(client) })
 		await waitFor(() => expect(list.current.isSuccess).toBe(true))
 
 		const before = listHits
@@ -139,7 +136,7 @@ describe("contacts hooks", () => {
 			http.delete(`${API}/forms/contacts/c1`, () => HttpResponse.json(wrap({}))),
 		)
 		const client = buildQueryClient()
-		const { result: list } = renderHook(() => useContactsList({ limit: 100 }), { wrapper: wrapped(client) })
+		const { result: list } = renderHook(() => useContactsList({ page: 1, limit: 20 }), { wrapper: wrapped(client) })
 		await waitFor(() => expect(list.current.isSuccess).toBe(true))
 		const before = listHits
 

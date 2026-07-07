@@ -223,7 +223,7 @@ export default function PostForm({ post }: { post?: Post }) {
 									<div className="md:col-span-2 flex items-end">
 										<label className="flex items-center gap-2">
 											<input type="checkbox" {...register(`translations.${index}.is_default`)}
-												onChange={(e) => { if (e.target.checked) fields.forEach((_, i) => { if (i !== index) setValue(`translations.${i}.is_default`, false) }) }}
+												onChange={(e) => { if (e.target.checked) { fields.forEach((_, i) => setValue(`translations.${i}.is_default`, i === index)) } else { setValue(`translations.${index}.is_default`, false) } }}
 												className="h-4 w-4 text-primary rounded" />
 											<span className="text-sm text-gray-900">اللغة الافتراضية</span>
 										</label>

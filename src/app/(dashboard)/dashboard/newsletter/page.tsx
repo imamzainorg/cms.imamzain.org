@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import type { Subscriber } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
@@ -21,10 +22,14 @@ import {
 } from "@/lib/queries/newsletter"
 import { useListPage } from "@/lib/use-list-page"
 
-type Filter = "all" | "active" | "inactive"
+// The API's subscriber list has no "all" mode — omitting `is_active` returns
+// ACTIVE-only (newsletter.service.ts: `else where.is_active = true`). So the CMS
+// exposes only the two states the API can actually filter by; the grand total
+// is derived from the two counts.
+type Filter = "active" | "inactive"
 
 export default function NewsletterPage() {
-	const [filter, setFilter] = useState<Filter>("all")
+	const [filter, setFilter] = useState<Filter>("active")
 	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
 		useListPage({ initialLimit: 50 })
 	const { confirm, dialog } = useConfirm()
@@ -35,13 +40,15 @@ export default function NewsletterPage() {
 	}
 
 	// Each count is its own query — Query dedupes if the user flips filters fast.
-	const allCount = useSubscriberCount({})
 	const activeCount = useSubscriberCount({ is_active: true })
 	const inactiveCount = useSubscriberCount({ is_active: false })
+	const totalCount = (activeCount.data ?? 0) + (inactiveCount.data ?? 0)
 
-	const listParams: { page: number; limit: number; is_active?: boolean; search?: string } = { page, limit }
-	if (filter === "active") listParams.is_active = true
-	else if (filter === "inactive") listParams.is_active = false
+	const listParams: { page: number; limit: number; is_active: boolean; search?: string } = {
+		page,
+		limit,
+		is_active: filter === "active",
+	}
 	if (debouncedSearch) listParams.search = debouncedSearch
 
 	const subscribersQuery = useSubscribersList(listParams)
@@ -66,8 +73,8 @@ export default function NewsletterPage() {
 	const handleDelete = async (s: Subscriber) => {
 		const ok = await confirm({
 			title: `حذف المشترك "${s.email}"؟`,
-			description: "سيُحذف نهائياً ولن يتلقى أي رسائل لاحقاً. لا يمكن التراجع.",
-			confirmText: "حذف نهائي",
+			description: "سيُنقل إلى سلة المهملات ولن يتلقى أي رسائل. يمكن استعادته لاحقاً.",
+			confirmText: "حذف",
 			tone: "danger",
 		})
 		if (!ok) return
@@ -80,7 +87,7 @@ export default function NewsletterPage() {
 	const exportCSV = () => {
 		const csv = [
 			["البريد الإلكتروني", "الحالة", "تاريخ الاشتراك"].join(","),
-			...subscribers.map((s) => [s.email, s.is_active ? "نشط" : "غير نشط", new Date(s.created_at).toISOString()].join(",")),
+			...subscribers.map((s) => [s.email, s.is_active ? "نشط" : "غير نشط", safeFormat(s.subscribed_at, "yyyy-MM-dd")].join(",")),
 		].join("\n")
 		const a = document.createElement("a")
 		a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }))
@@ -88,9 +95,8 @@ export default function NewsletterPage() {
 		a.click()
 	}
 
-	const filterLabels: Record<Filter, string> = { all: "الكل", active: "النشطون", inactive: "المعطّلون" }
-	const cards: Array<{ key: Filter; label: string; value: number; icon: typeof Users; color: string; bg: string }> = [
-		{ key: "all", label: "الإجمالي", value: allCount.data ?? 0, icon: Users, color: "text-gray-500", bg: "bg-gray-100" },
+	const filterLabels: Record<Filter, string> = { active: "النشطون", inactive: "المعطّلون" }
+	const filterCards: Array<{ key: Filter; label: string; value: number; icon: typeof Users; color: string; bg: string }> = [
 		{ key: "active", label: "النشطون", value: activeCount.data ?? 0, icon: UserCheck, color: "text-green-600", bg: "bg-green-50" },
 		{ key: "inactive", label: "المعطّلون", value: inactiveCount.data ?? 0, icon: UserX, color: "text-red-600", bg: "bg-red-50" },
 	]
@@ -102,14 +108,27 @@ export default function NewsletterPage() {
 				description="إدارة مشتركي النشرة البريدية. اضغط البطاقات في الأعلى للتصفية."
 				icon={Newspaper}
 				actions={
-					<button onClick={exportCSV} disabled={!subscribers.length} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors">
-						<Download className="h-4 w-4" />تصدير CSV
-					</button>
+					<div className="flex items-center gap-2">
+						<Link href="/dashboard/newsletter/trash" className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 text-sm text-foreground border border-[hsl(var(--border-strong))] rounded-md hover:bg-surface-muted transition-colors">
+							<Trash2 className="h-4 w-4" strokeWidth={1.6} />سلة المهملات
+						</Link>
+						<button onClick={exportCSV} disabled={!subscribers.length} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors">
+							<Download className="h-4 w-4" />تصدير CSV
+						</button>
+					</div>
 				}
 			/>
 
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-				{cards.map(({ key, label, value, icon: Icon, color, bg }) => (
+				{/* Grand total — informational only (the API has no single "all" list mode). */}
+				<div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4 text-right">
+					<div className="p-3 rounded-lg bg-gray-100"><Users className="h-6 w-6 text-gray-500" /></div>
+					<div>
+						<p className="text-sm text-gray-500">الإجمالي</p>
+						<p className="text-2xl font-semibold text-gray-900">{totalCount}</p>
+					</div>
+				</div>
+				{filterCards.map(({ key, label, value, icon: Icon, color, bg }) => (
 					<button
 						key={key}
 						onClick={() => onFilterChange(key)}
@@ -129,7 +148,6 @@ export default function NewsletterPage() {
 					value={filter}
 					onChange={onFilterChange}
 					options={[
-						{ value: "all", label: filterLabels.all },
 						{ value: "active", label: filterLabels.active },
 						{ value: "inactive", label: filterLabels.inactive },
 					]}
@@ -161,8 +179,8 @@ export default function NewsletterPage() {
 							<tr><td colSpan={4} className="px-6 py-0">
 								<EmptyState
 									icon={Mail}
-									title={debouncedSearch ? "لا توجد نتائج" : filter === "active" ? "لا يوجد مشتركون نشطون" : filter === "inactive" ? "لا يوجد مشتركون معطّلون" : "لا يوجد مشتركون بعد"}
-									description={debouncedSearch ? "جرّب بريداً مختلفاً." : filter === "all" ? "ستظهر هنا عناوين البريد التي اشتركت في النشرة من الموقع." : "غيّر الفلتر لعرض كل المشتركين."}
+									title={debouncedSearch ? "لا توجد نتائج" : filter === "active" ? "لا يوجد مشتركون نشطون" : "لا يوجد مشتركون معطّلون"}
+									description={debouncedSearch ? "جرّب بريداً مختلفاً." : "بدّل الفلتر لعرض المشتركين بحالة أخرى."}
 								/>
 							</td></tr>
 						) : subscribers.map((s) => (
@@ -173,7 +191,7 @@ export default function NewsletterPage() {
 										{s.is_active ? "نشط" : "معطّل"}
 									</span>
 								</td>
-								<td className="px-6 py-4 text-sm text-gray-500">{safeFormat(s.created_at, "dd/MM/yyyy")}</td>
+								<td className="px-6 py-4 text-sm text-gray-500">{safeFormat(s.subscribed_at, "dd/MM/yyyy")}</td>
 								<td className="px-6 py-4 text-left text-sm flex justify-end items-center gap-3">
 									<button onClick={() => toggleStatus(s)} className={`cursor-pointer text-sm font-medium ${s.is_active ? "text-red-600 hover:text-red-900" : "text-green-600 hover:text-green-900"}`}>
 										{s.is_active ? "تعطيل" : "تفعيل"}

@@ -16,7 +16,7 @@ const sub = {
 	email: "user@example.com",
 	is_active: true,
 	unsubscribed_at: null,
-	created_at: "2024-01-01",
+	subscribed_at: "2024-01-01",
 }
 
 const server = setupServer()

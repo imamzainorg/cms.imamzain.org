@@ -1,9 +1,9 @@
 "use client"
 
-import { useQueries } from "@tanstack/react-query"
 import { useAuthStore } from "@/store/auth"
 import type { Post } from "@/types"
 import {
+	AudioLines,
 	BookOpen,
 	FileText,
 	Mail,
@@ -24,8 +24,6 @@ import EmptyState from "@/components/ui/EmptyState"
 import { StatGridSkeleton, Skeleton, ListSkeleton } from "@/components/ui/Skeleton"
 import { useDashboardStats } from "@/lib/queries/dashboard"
 import { usePostsList } from "@/lib/queries/posts"
-import { mediaService } from "@/services/media.service"
-import { queryKeys } from "@/lib/queries/keys"
 
 export default function DashboardPage() {
 	const { user } = useAuthStore()
@@ -36,20 +34,6 @@ export default function DashboardPage() {
 	const recentPostsQuery = usePostsList({ limit: 5 })
 	const recentPosts: Post[] = recentPostsQuery.data?.items ?? []
 
-	const thumbIds = Array.from(
-		new Set(recentPosts.map((p) => p.cover_image_id).filter((id): id is string => Boolean(id))),
-	)
-	const thumbQueries = useQueries({
-		queries: thumbIds.map((id) => ({
-			queryKey: queryKeys.media.detail(id),
-			queryFn: async () => (await mediaService.get(id)).data,
-		})),
-	})
-	const recentThumbs: Record<string, string> = {}
-	thumbQueries.forEach((q, i) => {
-		if (q.data) recentThumbs[thumbIds[i]] = q.data.url
-	})
-
 	if (statsQuery.isLoading || recentPostsQuery.isLoading) {
 		return (
 			<div className="space-y-6">
@@ -57,7 +41,7 @@ export default function DashboardPage() {
 					<Skeleton className="h-6 w-1/3" />
 					<Skeleton className="h-4 w-2/3" />
 				</div>
-				<StatGridSkeleton count={4} />
+				<StatGridSkeleton count={5} />
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 					<div className="lg:col-span-2 bg-white rounded-xl border border-[hsl(var(--border))] overflow-hidden shadow-soft">
 						<div className="px-5 py-4 border-b border-[hsl(var(--border))]"><Skeleton className="h-4 w-1/4" /></div>
@@ -88,6 +72,17 @@ export default function DashboardPage() {
 		{ label: "الكتب", value: stats?.library.books ?? 0, icon: BookOpen, href: "/dashboard/books" },
 		{ label: "الأبحاث", value: stats?.library.academic_papers ?? 0, icon: GraduationCap, href: "/dashboard/papers" },
 		{ label: "صور المعرض", value: stats?.library.gallery_images ?? 0, icon: ImageIcon, href: "/dashboard/gallery" },
+		{
+			label: "الصوتيات",
+			value: stats?.audios?.total ?? 0,
+			icon: AudioLines,
+			href: "/dashboard/audios",
+			// stats?.audios is optional-chained: older API deployments don't
+			// return the field yet — card still renders, just without breakdown.
+			sub: stats?.audios
+				? `${formatArNumber(stats.audios.published)} منشور · ${formatArNumber(stats.audios.drafts)} مسودة`
+				: undefined,
+		},
 	]
 
 	const inboxItems = [
@@ -208,8 +203,8 @@ export default function DashboardPage() {
 					</h2>
 					<div className="flex-1 mx-3 divider-brand" />
 				</header>
-				<div className="grid grid-cols-2 lg:grid-cols-4 rounded-xl bg-white border border-[hsl(var(--border))] shadow-soft overflow-hidden divide-x divide-x-reverse divide-[hsl(var(--border))]">
-					{contentStats.map(({ label, value, icon: Icon, href }) => (
+				<div className="grid grid-cols-2 lg:grid-cols-5 rounded-xl bg-white border border-[hsl(var(--border))] shadow-soft overflow-hidden divide-x divide-x-reverse divide-[hsl(var(--border))]">
+					{contentStats.map(({ label, value, icon: Icon, href, sub }) => (
 						<Link
 							key={label}
 							href={href}
@@ -230,6 +225,11 @@ export default function DashboardPage() {
 							<p className="text-[12.5px] text-[hsl(var(--foreground-muted))] mt-2">
 								{label}
 							</p>
+							{sub && (
+								<p className="text-[11px] text-[hsl(var(--foreground-subtle))] mt-1 arabic-nums tabular-nums">
+									{sub}
+								</p>
+							)}
 						</Link>
 					))}
 				</div>
@@ -321,7 +321,9 @@ export default function DashboardPage() {
 				) : (
 					<div className="divide-y divide-[hsl(var(--border))]">
 						{recentPosts.map((p) => {
-							const thumb = p.cover_image_id ? recentThumbs[p.cover_image_id] : null
+							// Slim list payload embeds cover media (and first attachment)
+							// directly — no per-post GET /media/:id needed.
+							const thumb = p.media?.url || p.post_attachments?.[0]?.media?.url || null
 							return (
 								<Link
 									key={p.id}
@@ -352,14 +354,6 @@ export default function DashboardPage() {
 												<Eye className="h-3 w-3" strokeWidth={1.6} />
 												{formatArNumber(p.views ?? 0)}
 											</span>
-											{p.translation?.reading_time_minutes ? (
-												<>
-													<span className="text-[hsl(var(--foreground-subtle))]">·</span>
-													<span className="arabic-nums">
-														{toArabicDigits(p.translation.reading_time_minutes)} د قراءة
-													</span>
-												</>
-											) : null}
 											<span className="text-[hsl(var(--foreground-subtle))]">·</span>
 											<span className="arabic-nums tabular-nums">
 												{toArabicDigits(safeFormat(p.created_at, "dd/MM/yyyy"))}

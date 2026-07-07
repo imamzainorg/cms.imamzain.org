@@ -15,6 +15,12 @@ export const usersService = {
 
 	remove: (id: string) => api.delete(`/users/${id}`),
 
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<UserSummary>>("/users/trash", { params }),
+
+	// 409 if the original username was reclaimed by a live user meanwhile.
+	restore: (id: string) => api.post<UserDetail>(`/users/${id}/restore`),
+
 	assignRole: (userId: string, roleId: string) =>
 		api.post<{ message: string }>(`/users/${userId}/roles`, { role_id: roleId }),
 

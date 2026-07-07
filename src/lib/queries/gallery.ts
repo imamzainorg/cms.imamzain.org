@@ -25,6 +25,8 @@ const queries = makeResourceQueries<
 })
 
 export const useGalleryList = queries.useList
+/** Full record (list payloads are slim — translations drop `description`). */
+export const useGalleryImage = queries.useOne
 export const useCreateGalleryItem = queries.useCreate
 export const useUpdateGalleryItem = queries.useUpdate
 export const useDeleteGalleryItem = queries.useRemove

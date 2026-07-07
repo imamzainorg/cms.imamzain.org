@@ -8,6 +8,10 @@ export type BookTranslationItem = {
 	publisher: string | null
 	description: string | null
 	series: string | null
+	slug?: string | null
+	meta_title?: string | null
+	meta_description?: string | null
+	og_image_id?: string | null
 	is_default: boolean
 }
 
@@ -25,6 +29,7 @@ export type Book = {
 	isbn: string | null
 	pages: number | null
 	publish_year: string | null
+	pdf_url?: string | null
 	part_number: number | null
 	parts: number | null
 	views: number

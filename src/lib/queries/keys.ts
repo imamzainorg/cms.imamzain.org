@@ -68,10 +68,6 @@ export const queryKeys = {
 		lists: () => [...queryKeys.contacts.all, "list"] as const,
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.contacts.lists(), params] as const,
-		// Single stable key for "all contacts in the inbox" — the backend rejects
-		// ?status= as non-whitelisted, so every consumer shares one cache entry
-		// and derives filtered views / counts client-side.
-		inbox: () => [...queryKeys.contacts.all, "inbox"] as const,
 	},
 	media: {
 		all: ["media"] as const,
@@ -84,6 +80,7 @@ export const queryKeys = {
 		lists: () => [...queryKeys.gallery.all, "list"] as const,
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.gallery.lists(), params] as const,
+		detail: (id: string) => [...queryKeys.gallery.all, "detail", id] as const,
 	},
 	galleryCategories: {
 		all: ["gallery-categories"] as const,
@@ -96,8 +93,6 @@ export const queryKeys = {
 		lists: () => [...queryKeys.proxyVisits.all, "list"] as const,
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.proxyVisits.lists(), params] as const,
-		// Single stable key — same rationale as contacts.inbox().
-		inbox: () => [...queryKeys.proxyVisits.all, "inbox"] as const,
 	},
 	auditLogs: {
 		all: ["audit-logs"] as const,
@@ -141,6 +136,34 @@ export const queryKeys = {
 		list: (params: Record<string, unknown>) =>
 			[...queryKeys.campaigns.lists(), params] as const,
 		detail: (id: string) => [...queryKeys.campaigns.all, "detail", id] as const,
+	},
+	staticPages: {
+		all: ["static-pages"] as const,
+		lists: () => [...queryKeys.staticPages.all, "list"] as const,
+		list: (params: Record<string, unknown>) =>
+			[...queryKeys.staticPages.lists(), params] as const,
+		detail: (id: string) => [...queryKeys.staticPages.all, "detail", id] as const,
+	},
+	stores: {
+		all: ["stores"] as const,
+		lists: () => [...queryKeys.stores.all, "list"] as const,
+		list: (params: Record<string, unknown>) =>
+			[...queryKeys.stores.lists(), params] as const,
+		detail: (id: string) => [...queryKeys.stores.all, "detail", id] as const,
+	},
+	audios: {
+		all: ["audios"] as const,
+		lists: () => [...queryKeys.audios.all, "list"] as const,
+		list: (params: Record<string, unknown>) =>
+			[...queryKeys.audios.lists(), params] as const,
+		detail: (id: string) => [...queryKeys.audios.all, "detail", id] as const,
+	},
+	speakers: {
+		all: ["speakers"] as const,
+		lists: () => [...queryKeys.speakers.all, "list"] as const,
+		list: (params: Record<string, unknown>) =>
+			[...queryKeys.speakers.lists(), params] as const,
+		detail: (id: string) => [...queryKeys.speakers.all, "detail", id] as const,
 	},
 	trash: {
 		all: ["trash"] as const,

@@ -10,4 +10,10 @@ export const newsletterService = {
 	resubscribeById: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/resubscribe`),
 
 	remove: (id: string) => api.delete(`/newsletter/subscribers/${id}`),
+
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<Subscriber>>("/newsletter/subscribers/trash", { params }),
+
+	// Restore clears deleted_at AND reactivates the subscriber.
+	restore: (id: string) => api.post<Subscriber>(`/newsletter/subscribers/${id}/restore`),
 }

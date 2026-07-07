@@ -30,11 +30,19 @@ describe("mediaService", () => {
 		let body: unknown = null
 		server.use(http.post(`${API}/media/upload-url`, async ({ request }) => {
 			body = await request.json()
-			return HttpResponse.json(wrap({ uploadUrl: "https://s3/x", key: "k1" }))
+			return HttpResponse.json(wrap({
+				uploadUrl: "https://s3/x",
+				key: "k1",
+				publicUrl: "https://cdn.test/k1",
+				mediaId: "m-k1",
+				maxBytes: 26214400,
+			}))
 		}))
 		const { data } = await mediaService.requestUploadUrl("a.png", "image/png")
 		expect(body).toEqual({ filename: "a.png", mime_type: "image/png" })
-		expect((data as { key: string }).key).toBe("k1")
+		expect(data.key).toBe("k1")
+		expect(data.mediaId).toBe("m-k1")
+		expect(data.maxBytes).toBe(26214400)
 	})
 
 	it("confirmUpload POSTs the full metadata payload", async () => {

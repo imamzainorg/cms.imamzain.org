@@ -8,6 +8,10 @@ export type AcademicPaperTranslationItem = {
 	keywords: string[]
 	publication_venue: string | null
 	page_count: number | null
+	slug?: string | null
+	meta_title?: string | null
+	meta_description?: string | null
+	og_image_id?: string | null
 	is_default: boolean
 }
 

@@ -42,6 +42,15 @@ export function setAuthFailureHandler(h: (() => void) | null) {
 }
 
 api.interceptors.request.use((config) => {
+	// Force the browser HTTP cache to revalidate on every CMS read. Several
+	// list/detail endpoints the admin consumes (stores, gallery, books, papers,
+	// the four category types) are the SAME public routes the site uses, and the
+	// API sends them `Cache-Control: public, max-age=…` (up to 5 min). Without
+	// this, a refetch right after an edit is served from the still-fresh browser
+	// cache and the editor sees stale data. The API emits ETags, so unchanged
+	// resources come back as cheap 304s. CORS reflects request headers
+	// (no fixed allowlist server-side), so this doesn't break the preflight.
+	config.headers["Cache-Control"] = "no-cache"
 	if (typeof window !== "undefined") {
 		const token = localStorage.getItem(ACCESS_TOKEN_KEY)
 		if (token) {
@@ -67,6 +76,31 @@ api.interceptors.request.use((config) => {
 let refreshInflight: Promise<string | null> | null = null
 const refreshWaiters: Array<(token: string | null) => void> = []
 
+/** POST /auth/refresh with a specific token; stores + returns the new access token. */
+async function postRefresh(refreshToken: string): Promise<string | null> {
+	// Bare axios — bypasses our interceptors so we don't recurse on 401.
+	const resp = await axios.post<{
+		success?: boolean
+		data?: { accessToken: string; refresh_token: string }
+	}>(
+		`${API_URL}/auth/refresh`,
+		{ refresh_token: refreshToken },
+		{ headers: { "Content-Type": "application/json" } },
+	)
+	const data = resp.data?.data
+	if (!data?.accessToken || !data?.refresh_token) return null
+	setAccessToken(data.accessToken)
+	setRefreshToken(data.refresh_token)
+	return data.accessToken
+}
+
+function refreshErrorCode(e: unknown): string | undefined {
+	if (axios.isAxiosError(e)) {
+		return (e.response?.data as { code?: string } | undefined)?.code
+	}
+	return undefined
+}
+
 async function attemptRefresh(): Promise<string | null> {
 	const refreshToken = getRefreshToken()
 	if (!refreshToken) {
@@ -76,28 +110,38 @@ async function attemptRefresh(): Promise<string | null> {
 		return null
 	}
 	try {
-		// Bare axios — bypasses our interceptors so we don't recurse on 401.
-		const resp = await axios.post<{
-			success?: boolean
-			data?: { accessToken: string; refresh_token: string }
-		}>(
-			`${API_URL}/auth/refresh`,
-			{ refresh_token: refreshToken },
-			{ headers: { "Content-Type": "application/json" } },
-		)
-		const data = resp.data?.data
-		if (!data?.accessToken || !data?.refresh_token) return null
-		setAccessToken(data.accessToken)
-		setRefreshToken(data.refresh_token)
-		return data.accessToken
+		return await postRefresh(refreshToken)
 	} catch (e) {
-		// 401 here = invalid / reused refresh token → session is over, wipe both.
-		// Network / 5xx during refresh = transient → keep tokens so the next
-		// attempt can recover; we just fail THIS request.
 		if (axios.isAxiosError(e) && e.response?.status === 401) {
+			// AUTH_REFRESH_ALREADY_ROTATED = we lost a rotation race: another tab
+			// refreshed first and stored the NEWER refresh token in localStorage.
+			// The session itself is fine — only OUR copy of the token is stale.
+			// Re-read storage and retry ONCE with the newer token before giving
+			// up, so multi-tab usage doesn't randomly log the user out.
+			if (refreshErrorCode(e) === "AUTH_REFRESH_ALREADY_ROTATED") {
+				const newest = getRefreshToken()
+				if (newest && newest !== refreshToken) {
+					try {
+						return await postRefresh(newest)
+					} catch (retryErr) {
+						// Retry also 401'd → session really is over, wipe both.
+						// Transient network/5xx on the retry keeps tokens intact.
+						if (axios.isAxiosError(retryErr) && retryErr.response?.status === 401) {
+							setAccessToken(null)
+							setRefreshToken(null)
+						}
+						return null
+					}
+				}
+				// Same/absent stored token: nothing newer to try — session over.
+			}
+			// All other 401 codes (AUTH_TOKEN_REUSED, AUTH_REFRESH_INVALID,
+			// AUTH_ACCOUNT_DISABLED, none) → session is over, wipe both.
 			setAccessToken(null)
 			setRefreshToken(null)
 		}
+		// Network / 5xx during refresh = transient → keep tokens so the next
+		// attempt can recover; we just fail THIS request.
 		return null
 	}
 }
@@ -158,9 +202,38 @@ api.interceptors.response.use(
 	},
 )
 
+/** Error-envelope body shape: { success: false, code, error, errors?, ... }. */
+type ApiErrorBody = {
+	code?: string
+	error?: string | string[]
+	message?: string | string[]
+	errors?: Array<{ message: string } | string>
+}
+
+/** Pull the human-readable server string out of an error envelope, if any. */
+function serverErrorString(data: ApiErrorBody | undefined): string | null {
+	if (!data) return null
+	if (Array.isArray(data.error)) return data.error.join("، ")
+	if (typeof data.error === "string") return data.error
+	if (Array.isArray(data.message)) return data.message.join("، ")
+	if (typeof data.message === "string") return data.message
+	if (Array.isArray(data.errors) && data.errors.length) {
+		return data.errors.map((e) => typeof e === "string" ? e : e.message).join("، ")
+	}
+	return null
+}
+
 /**
  * Extract a human-readable error message from an axios error.
  * Falls back to the provided default if no specific message is available.
+ *
+ * Resolution order:
+ *  (a) domain Error subclasses thrown by services — their message is already
+ *      user-facing Arabic;
+ *  (b) the envelope's stable machine `code` → localized Arabic string;
+ *  (c) the server's human `error`/`message`/`errors[]` string(s);
+ *  (d) network / bare-status fallbacks, then the caller's `fallback`.
+ * Unrecognized codes fall through to (c) — their HTTP-status default.
  */
 export function getErrorMessage(error: unknown, fallback: string): string {
 	// Domain errors thrown by services (e.g. MediaSizeExceededError) carry
@@ -171,21 +244,44 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 		if (error.constructor !== Error) return error.message
 	}
 	if (axios.isAxiosError(error)) {
-		const err = error as AxiosError<{
-			error?: string | string[]
-			message?: string | string[]
-			errors?: Array<{ message: string } | string>
-		}>
+		const err = error as AxiosError<ApiErrorBody>
 		const data = err.response?.data
-		if (data) {
-			if (Array.isArray(data.error)) return data.error.join("، ")
-			if (typeof data.error === "string") return data.error
-			if (Array.isArray(data.message)) return data.message.join("، ")
-			if (typeof data.message === "string") return data.message
-			if (Array.isArray(data.errors) && data.errors.length) {
-				return data.errors.map((e) => typeof e === "string" ? e : e.message).join("، ")
-			}
+
+		switch (data?.code) {
+			case "RATE_LIMITED":
+				return "طلبات كثيرة خلال وقت قصير — انتظر قليلاً ثم أعد المحاولة."
+			case "UNAUTHORIZED":
+				// A bare 401 from /auth/login is "wrong credentials", not an
+				// expired session — fall through to the server string there.
+				if (!String(err.config?.url ?? "").includes("/auth/login")) {
+					return "انتهت الجلسة — سجّل الدخول مجددًا."
+				}
+				break
+			case "FORBIDDEN":
+				return "ليس لديك صلاحية لتنفيذ هذا الإجراء."
+			case "NOT_FOUND":
+				return "العنصر غير موجود."
+			case "INVALID_IDENTIFIER":
+				return "معرّف غير صالح."
+			case "PAYLOAD_TOO_LARGE":
+				// The server string names the exact cap + MIME type — prefer it.
+				return serverErrorString(data) ?? "الملف أو المحتوى يتجاوز الحجم المسموح."
+			case "INTERNAL_ERROR":
+				return "حدث خطأ في الخادم — حاول مجددًا لاحقًا."
+			case "AUTH_ACCOUNT_DISABLED":
+				return "تم تعطيل هذا الحساب."
+			case "VALIDATION_FAILED":
+				// errors[] carries the per-field messages; the top-level `error`
+				// is just a generic "Validation failed".
+				if (data && Array.isArray(data.errors) && data.errors.length) {
+					return data.errors.map((e) => typeof e === "string" ? e : e.message).join("، ")
+				}
+				break
+			// CONFLICT + anything unrecognized → server-string preference below.
 		}
+
+		const serverString = serverErrorString(data)
+		if (serverString) return serverString
 		if (err.code === "ERR_NETWORK") return "تعذّر الاتصال بالخادم. تحقّق من الشبكة."
 		if (err.response?.status === 403) return "ليس لديك صلاحية لتنفيذ هذا الإجراء."
 		if (err.response?.status === 404) return "العنصر غير موجود."

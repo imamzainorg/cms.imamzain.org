@@ -9,27 +9,38 @@ function paginated<T>(items: T[]) {
 	return { items, pagination: { page: 1, limit: 20, total: items.length, pages: 1 } }
 }
 
-const mockPost = {
+// LIST payloads are slim: no `body` on translations, reading_time_minutes 0.
+const mockPostListItem = {
 	id: "p1",
 	category_id: "cat1",
 	cover_image_id: null,
 	is_published: false,
+	is_featured: false,
 	published_at: null,
 	views: 0,
 	created_at: "2024-01-01T00:00:00Z",
 	updated_at: "2024-01-01T00:00:00Z",
 	post_translations: [
-		{ lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true },
+		{ lang: "en", title: "Test Post", summary: null, slug: "test-post", is_default: true, reading_time_minutes: 0 },
 	],
-	translation: { lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true },
+	translation: { lang: "en", title: "Test Post", summary: null, slug: "test-post", is_default: true, reading_time_minutes: 0 },
+}
+
+// DETAIL payloads carry the full translation incl. `body` + derived read time.
+const mockPostDetail = {
+	...mockPostListItem,
+	post_translations: [
+		{ lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true, reading_time_minutes: 1 },
+	],
+	translation: { lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true, reading_time_minutes: 1 },
 }
 
 const server = setupServer(
-	http.get(`${API}/posts/admin`, () => HttpResponse.json(wrap(paginated([mockPost])))),
-	http.get(`${API}/posts/admin/p1`, () => HttpResponse.json(wrap(mockPost))),
-	http.post(`${API}/posts`, () => HttpResponse.json(wrap(mockPost), { status: 201 })),
-	http.patch(`${API}/posts/p1`, () => HttpResponse.json(wrap({ ...mockPost, is_published: true }))),
-	http.patch(`${API}/posts/p1/publish`, () => HttpResponse.json(wrap({ ...mockPost, is_published: true }))),
+	http.get(`${API}/posts/admin`, () => HttpResponse.json(wrap(paginated([mockPostListItem])))),
+	http.get(`${API}/posts/admin/p1`, () => HttpResponse.json(wrap(mockPostDetail))),
+	http.post(`${API}/posts`, () => HttpResponse.json(wrap(mockPostDetail), { status: 201 })),
+	http.patch(`${API}/posts/p1`, () => HttpResponse.json(wrap({ ...mockPostDetail, is_published: true }))),
+	http.patch(`${API}/posts/p1/publish`, () => HttpResponse.json(wrap({ ...mockPostDetail, is_published: true }))),
 	http.delete(`${API}/posts/p1`, () => HttpResponse.json(wrap({ message: "Deleted" }))),
 )
 

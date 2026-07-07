@@ -35,6 +35,12 @@ export type DashboardContestStats = {
 	attempts_recent: number
 }
 
+export type DashboardAudiosStats = {
+	total: number
+	published: number
+	drafts: number
+}
+
 export type DashboardStats = {
 	recent_window_days: number
 	posts: DashboardPostsStats
@@ -43,4 +49,6 @@ export type DashboardStats = {
 	newsletter: DashboardNewsletterStats
 	forms: DashboardFormsStats
 	contest: DashboardContestStats
+	/** Optional: absent on API deployments older than the audios module — guard at runtime. */
+	audios?: DashboardAudiosStats
 }

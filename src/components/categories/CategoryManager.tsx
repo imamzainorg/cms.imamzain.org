@@ -80,7 +80,7 @@ export default function CategoryManager<T extends GenericCategory>({
 	const handleDelete = async (id: string) => {
 		const ok = await confirm({
 			title: `حذف هذا ${singular}؟`,
-			description: "سيفشل الحذف إذا كان التصنيف مرتبطاً بمحتوى. لا يمكن التراجع.",
+			description: "سيفشل الحذف إذا كان التصنيف مرتبطاً بمحتوى. يُنقل المحذوف إلى سلة المهملات ويمكن استعادته.",
 			confirmText: "حذف",
 			tone: "danger",
 		})

@@ -19,6 +19,10 @@ export const papersService = {
 			keywords: string[]
 			publication_venue?: string
 			page_count?: number
+			slug?: string
+			meta_title?: string
+			meta_description?: string
+			og_image_id?: string | null
 			is_default: boolean
 		}[]
 	}) => api.post<AcademicPaper>("/academic-papers", body),
@@ -26,7 +30,8 @@ export const papersService = {
 	update: (id: string, body: Partial<{
 		category_id: string
 		published_year: string
-		pdf_url: string
+		// null clears the stored URL (PATCH: undefined = leave unchanged)
+		pdf_url: string | null
 		translations: {
 			lang: string
 			title: string
@@ -35,6 +40,10 @@ export const papersService = {
 			keywords: string[]
 			publication_venue?: string
 			page_count?: number
+			slug?: string
+			meta_title?: string
+			meta_description?: string
+			og_image_id?: string | null
 			is_default: boolean
 		}[]
 	}>) => api.patch<AcademicPaper>(`/academic-papers/${id}`, body),

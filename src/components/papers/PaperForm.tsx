@@ -8,15 +8,17 @@ import { z } from "zod"
 import type { AcademicPaper } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { categoryName } from "@/lib/i18n"
+import { categoryName, slugify } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
 import { useCreatePaper, useUpdatePaper } from "@/lib/queries/papers"
 import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
+import MediaInput from "@/components/ui/MediaInput"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
-import { Loader2, Plus, Trash2, FileText, Upload } from "lucide-react"
-import { mediaService } from "@/services/media.service"
+import { Loader2, Plus, Trash2 } from "lucide-react"
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 const translationSchema = z.object({
 	lang: z.string().min(2),
@@ -30,13 +32,26 @@ const translationSchema = z.object({
 	keywords: z.array(z.string()),
 	publication_venue: z.string().optional(),
 	page_count: z.number().optional(),
+	slug: z.string()
+		.max(200, "الرابط المختصر طويل جداً (الحد الأقصى 200)")
+		.refine((s) => !s || SLUG_RE.test(s), {
+			message: "الرابط المختصر: أحرف لاتينية صغيرة وأرقام وشرطات فقط (مثل: fiqh-al-imam)",
+		})
+		.optional(),
+	meta_title: z.string().max(300).optional(),
+	meta_description: z.string().max(500).optional(),
+	og_image_id: z.string().nullable().optional(),
 	is_default: z.boolean(),
 })
 
 const paperFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
 	published_year: z.string().optional(),
-	pdf_url: z.string().optional(),
+	pdf_url: z.string()
+		.refine((s) => !s || /^https?:\/\/.+/i.test(s), {
+			message: "يجب أن يبدأ الرابط بـ http:// أو https://",
+		})
+		.optional(),
 	translations: z.array(translationSchema).min(1),
 })
 
@@ -54,7 +69,6 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const [activeLang, setActiveLang] = useState("ar")
 	const [newAuthor, setNewAuthor] = useState("")
 	const [newKeyword, setNewKeyword] = useState("")
-	const [uploadingPdf, setUploadingPdf] = useState(false)
 
 	type PaperTranslationField = PaperFormData["translations"][number]
 	const blankTranslation = (lang = "ar", is_default = true): PaperTranslationField => ({
@@ -65,6 +79,10 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		keywords: [],
 		publication_venue: "",
 		page_count: undefined,
+		slug: "",
+		meta_title: "",
+		meta_description: "",
+		og_image_id: null,
 		is_default,
 	})
 
@@ -92,6 +110,10 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				keywords: t.keywords ?? [],
 				publication_venue: t.publication_venue ?? "",
 				page_count: t.page_count ?? undefined,
+				slug: t.slug ?? "",
+				meta_title: t.meta_title ?? "",
+				meta_description: t.meta_description ?? "",
+				og_image_id: t.og_image_id ?? null,
 				is_default: t.is_default ?? false,
 			}))
 			: [blankTranslation()]
@@ -118,7 +140,6 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
 	const translations = watch("translations")
-	const pdfUrl = watch("pdf_url")
 
 	useEffect(() => {
 		if (categoriesQuery.error) {
@@ -167,22 +188,6 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const removeKeyword = (i: number, ki: number) =>
 		setValue(`translations.${i}.keywords`, translations[i]?.keywords.filter((_, idx) => idx !== ki))
 
-	const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0]
-		if (!file) return
-		setUploadingPdf(true)
-		try {
-			const record = await mediaService.uploadFile(file)
-			setValue("pdf_url", record.url, { shouldDirty: true })
-			toast.success("تم رفع الملف")
-		} catch (err) {
-			toast.error(getErrorMessage(err, "فشل رفع الملف"))
-		} finally {
-			setUploadingPdf(false)
-			e.target.value = ""
-		}
-	}
-
 	const onSubmit = async (data: PaperFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -191,12 +196,18 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		}
 		const cleaned = {
 			...data,
-			pdf_url: data.pdf_url || undefined,
+			// PATCH semantics: undefined = leave unchanged, null = clear. Send
+			// null on edit so an editor can remove a wrong PDF link.
+			pdf_url: data.pdf_url || (paper ? null : undefined),
 			published_year: data.published_year || undefined,
 			translations: data.translations.map((t) => ({
 				...t,
 				abstract: t.abstract ? sanitizeEditorHtml(t.abstract) : undefined,
 				publication_venue: t.publication_venue || undefined,
+				slug: t.slug || undefined,
+				meta_title: t.meta_title || undefined,
+				meta_description: t.meta_description || undefined,
+				og_image_id: t.og_image_id ?? null,
 			})),
 		}
 		const handlers = {
@@ -238,21 +249,10 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						<input type="number" {...register("published_year")} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 					</div>
 					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-1">ملف PDF</label>
-						{pdfUrl ? (
-							<div className="flex items-center gap-2">
-								<a href={pdfUrl} target="_blank" rel="noreferrer" className="flex-1 inline-flex items-center gap-2 px-3 py-2 text-sm bg-primary/5 text-primary border border-primary/20 rounded-md hover:bg-primary/10 truncate">
-									<FileText className="h-4 w-4 shrink-0" />عرض الملف الحالي
-								</a>
-								<button type="button" onClick={() => setValue("pdf_url", "", { shouldDirty: true })} className="p-2 text-red-500 hover:bg-red-50 rounded-md"><Trash2 className="h-4 w-4" /></button>
-							</div>
-						) : (
-							<label className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-primary hover:bg-primary/5">
-								{uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-								{uploadingPdf ? "جارٍ الرفع..." : "رفع ملف PDF"}
-								<input type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={uploadingPdf} className="hidden" />
-							</label>
-						)}
+						<label className="block text-sm font-medium text-gray-700 mb-1">رابط ملف PDF</label>
+						<input {...register("pdf_url")} dir="ltr" placeholder="https://example.org/paper.pdf" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+						<p className="mt-1 text-xs text-gray-500">يُستضاف ملف PDF خارجيًا — ألصق الرابط المباشر.</p>
+						{errors.pdf_url && <p className="mt-1 text-sm text-red-600">{errors.pdf_url.message}</p>}
 					</div>
 				</div>
 			</div>
@@ -278,7 +278,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 							</div>
 							<div className="flex items-end">
 								<label className="flex items-center gap-2">
-									<input type="checkbox" {...register(`translations.${index}.is_default`)} onChange={(e) => { if (e.target.checked) fields.forEach((_, i) => { if (i !== index) setValue(`translations.${i}.is_default`, false) }) }} className="h-4 w-4 text-primary rounded" />
+									<input type="checkbox" {...register(`translations.${index}.is_default`)} onChange={(e) => { if (e.target.checked) { fields.forEach((_, i) => setValue(`translations.${i}.is_default`, i === index)) } else { setValue(`translations.${index}.is_default`, false) } }} className="h-4 w-4 text-primary rounded" />
 									<span className="text-sm">اللغة الافتراضية</span>
 								</label>
 							</div>
@@ -288,6 +288,23 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 							<input {...register(`translations.${index}.title`)} dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
 						</div>
+
+						<details className="text-sm">
+							<summary className="text-gray-500 cursor-pointer hover:text-gray-700 select-none">الرابط المختصر (slug)</summary>
+							<div className="mt-1 flex gap-2">
+								<input {...register(`translations.${index}.slug`)} dir="ltr" placeholder="fiqh-al-imam-sajjad" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs" />
+								<button
+									type="button"
+									onClick={() => setValue(`translations.${index}.slug`, slugify(translations[index]?.title || ""), { shouldDirty: true })}
+									className="cursor-pointer px-3 py-2 text-xs border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+								>
+									توليد من العنوان
+								</button>
+							</div>
+							<p className="mt-1 text-xs text-gray-400">اختياري — أحرف لاتينية صغيرة وأرقام وشرطات فقط. يحدّد رابط البحث العام لهذه اللغة؛ اتركه فارغاً ليبقى الوصول عبر المعرّف فقط.</p>
+							{errors.translations?.[index]?.slug && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.slug?.message}</p>}
+						</details>
+
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">الملخص</label>
 							<Controller
@@ -342,6 +359,51 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 								<input type="number" {...register(`translations.${index}.page_count`, { valueAsNumber: true })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							</div>
 						</div>
+
+						{/* SEO panel — per-translation override of OG/meta tags. */}
+						<details className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+							<summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none px-4 py-3 bg-linear-to-l from-primary/5 to-transparent border-b border-gray-100 flex items-center gap-2">
+								<span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 text-primary rounded-md text-xs font-medium">SEO</span>
+								إعدادات تحسين محركات البحث ({languageLabel(translations[index]?.lang)})
+							</summary>
+							<div className="p-5 space-y-5 bg-white">
+								<div>
+									<label className="block text-sm font-medium text-gray-800 mb-1.5">عنوان SEO (meta title)</label>
+									<input
+										{...register(`translations.${index}.meta_title`)}
+										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+										placeholder="إن تُرك فارغاً، يُستخدم العنوان الأصلي"
+										className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
+									/>
+									<p className="mt-1.5 text-xs text-gray-600">يظهر في وسم &lt;title&gt; وفي عنوان نتيجة البحث. اتركه فارغاً للاستعمال التلقائي.</p>
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-800 mb-1.5">وصف SEO (meta description)</label>
+									<textarea
+										{...register(`translations.${index}.meta_description`)}
+										rows={3}
+										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+										placeholder="إن تُرك فارغاً، يُستخدم مقطع من الملخص"
+										className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
+									/>
+									<p className="mt-1.5 text-xs text-gray-600">يظهر تحت العنوان في نتائج البحث. الحد الأمثل 150–160 حرفاً.</p>
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-800 mb-1.5">صورة المشاركة (og:image)</label>
+									<Controller
+										control={control}
+										name={`translations.${index}.og_image_id`}
+										render={({ field: f }) => (
+											<MediaInput
+												value={f.value ?? undefined}
+												onChange={f.onChange}
+											/>
+										)}
+									/>
+									<p className="mt-1.5 text-xs text-gray-600">تظهر عند مشاركة البحث في فيسبوك / تويتر.</p>
+								</div>
+							</div>
+						</details>
 					</>
 				)}
 			/>

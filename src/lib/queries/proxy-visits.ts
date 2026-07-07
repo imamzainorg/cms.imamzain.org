@@ -16,32 +16,31 @@ type ListParams = {
 }
 
 /**
- * Backend caveat (mirrors contacts): `/forms/proxy-visits` rejects `?status=`
- * as non-whitelisted. We fetch the full inbox once and filter / count
- * client-side. All variants share a single cache entry — previously every
- * status filter and every count caused a separate identical round-trip.
- *
- * `_params` is preserved for backwards-compat but no longer affects the key.
- * Remove when the API team adds `status` to the DTO whitelist.
+ * Server-side list: `ProxyVisitQueryDto` now whitelists `?status=` (alongside
+ * page/limit), so pagination and status filtering are done by the API. The
+ * old fetch-100-and-filter-client-side workaround is gone.
  */
-export function useProxyVisitsList(_params: ListParams = {}) {
+export function useProxyVisitsList(params: ListParams = {}) {
 	return useQuery({
-		queryKey: queryKeys.proxyVisits.inbox(),
-		queryFn: async () => (await proxyVisitsService.list({ limit: 100 })).data,
+		queryKey: queryKeys.proxyVisits.list(params),
+		queryFn: async () => (await proxyVisitsService.list(params)).data,
 		placeholderData: keepPreviousData,
 	})
 }
 
 /**
  * Count of proxy-visit requests matching a status (or grand total).
- * Derives from the shared inbox query — no separate round-trip.
+ * No dedicated stats endpoint — a `limit:1` request per filter and we read
+ * `pagination.total` (same pattern as `useSubscriberCount`).
  */
 export function useProxyVisitCount(filter: { status?: Status } = {}) {
-	const inbox = useProxyVisitsList()
-	const count = filter.status
-		? inbox.data?.items.filter((v) => v.status === filter.status).length ?? 0
-		: inbox.data?.pagination.total ?? 0
-	return { ...inbox, data: count }
+	return useQuery({
+		queryKey: queryKeys.proxyVisits.list({ count: true, ...filter }),
+		queryFn: async () => {
+			const r = await proxyVisitsService.list({ limit: 1, ...filter })
+			return r.data.pagination.total
+		},
+	})
 }
 
 export function useUpdateProxyVisit() {
@@ -61,6 +60,26 @@ export function useDeleteProxyVisit() {
 		mutationFn: (id: string) => proxyVisitsService.remove(id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.proxyVisits.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
+		},
+	})
+}
+
+export function useProxyVisitsTrash(params: { page?: number; limit?: number } = {}) {
+	return useQuery({
+		queryKey: queryKeys.trash.resource("proxy-visits", params),
+		queryFn: async () => (await proxyVisitsService.trash(params)).data,
+		placeholderData: keepPreviousData,
+	})
+}
+
+export function useRestoreProxyVisit() {
+	const qc = useQueryClient()
+	return useMutation({
+		mutationFn: (id: string) => proxyVisitsService.restore(id),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.proxyVisits.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
 		},
 	})
 }

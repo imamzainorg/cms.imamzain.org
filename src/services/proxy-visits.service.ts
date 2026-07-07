@@ -14,4 +14,9 @@ export const proxyVisitsService = {
 	}) => api.patch<ProxyVisit>(`/forms/proxy-visits/${id}`, body),
 
 	remove: (id: string) => api.delete(`/forms/proxy-visits/${id}`),
+
+	trash: (params?: { page?: number; limit?: number }) =>
+		api.get<PaginatedResponse<ProxyVisit>>("/forms/proxy-visits/trash", { params }),
+
+	restore: (id: string) => api.post<ProxyVisit>(`/forms/proxy-visits/${id}/restore`),
 }

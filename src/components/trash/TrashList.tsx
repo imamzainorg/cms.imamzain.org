@@ -115,13 +115,20 @@ export default function TrashList<T>({
 				<div className="bg-white rounded-xl border border-gray-200 flex items-center justify-center py-16">
 					<Loader2 className="h-8 w-8 animate-spin text-primary" />
 				</div>
-			) : items.length === 0 ? (
+			) : total === 0 ? (
 				<EmptyState
 					variant="card"
 					icon={Trash2}
 					title="سلة المهملات فارغة"
 					description="العناصر المحذوفة تظهر هنا. يمكن استعادتها مع الحفاظ على التاريخ."
 				/>
+			) : items.length === 0 ? (
+				// total > 0 but this page is empty (last row on the last page was
+				// just restored) — Pagination clamps `page` back in range and the
+				// query refetches; show a spinner rather than a false "empty" state.
+				<div className="bg-white rounded-xl border border-gray-200 flex items-center justify-center py-16">
+					<Loader2 className="h-8 w-8 animate-spin text-primary" />
+				</div>
 			) : (
 				<div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 					<table className="min-w-full divide-y divide-gray-200">

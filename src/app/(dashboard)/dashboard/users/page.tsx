@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useMutation } from "@tanstack/react-query"
 import type { UserSummary } from "@/types"
 import { toast } from "sonner"
@@ -9,6 +10,7 @@ import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import Modal from "@/components/ui/Modal"
 import PageHeader from "@/components/layout/PageHeader"
+import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { TableSkeleton } from "@/components/ui/Skeleton"
 import {
@@ -32,6 +34,8 @@ export default function UsersPage() {
 	const [editing, setEditing] = useState<UserSummary | null>(null)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
+	const [page, setPage] = useState(1)
+	const [limit, setLimit] = useState(20)
 	const { confirm, dialog } = useConfirm()
 
 	const [createForm, setCreateForm] = useState({ username: "", password: "" })
@@ -65,9 +69,11 @@ export default function UsersPage() {
 		)
 	}
 
-	const usersQuery = useUsersList({ limit: 100 })
+	const usersQuery = useUsersList({ page, limit })
 	const rolesQuery = useRolesList()
 	const users = usersQuery.data?.items ?? []
+	const total = usersQuery.data?.pagination.total ?? 0
+	const pages = usersQuery.data?.pagination.pages ?? 1
 	const roles = rolesQuery.data?.items ?? []
 	const isLoading = usersQuery.isLoading || rolesQuery.isLoading
 
@@ -114,8 +120,8 @@ export default function UsersPage() {
 	const handleDelete = async (u: UserSummary) => {
 		const ok = await confirm({
 			title: `حذف المستخدم "${u.username}"؟`,
-			description: "لن يستطيع تسجيل الدخول. هذا الإجراء نهائي ولا يمكن التراجع.",
-			confirmText: "حذف نهائي",
+			description: "لن يستطيع تسجيل الدخول. يمكن استعادة الحساب لاحقاً من سلة المهملات.",
+			confirmText: "حذف",
 			tone: "danger",
 		})
 		if (!ok) return
@@ -180,9 +186,14 @@ export default function UsersPage() {
 				description="أنشئ حسابات للمحررين وحدّد صلاحياتهم عبر الأدوار."
 				icon={UsersIcon}
 				actions={
-					<button onClick={() => setShowCreate(true)} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors">
-						<Plus className="h-4 w-4" />مستخدم جديد
-					</button>
+					<div className="flex items-center gap-2">
+						<Link href="/dashboard/users/trash" className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+							<Trash2 className="h-4 w-4" strokeWidth={1.6} />سلة المهملات
+						</Link>
+						<button onClick={() => setShowCreate(true)} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors">
+							<Plus className="h-4 w-4" />مستخدم جديد
+						</button>
+					</div>
 				}
 			/>
 
@@ -367,6 +378,15 @@ export default function UsersPage() {
 					)}
 				</div>
 			</div>
+
+			{/* Search filters within the fetched page (the users list endpoint has
+			    no server-side search); pagination keeps accounts past the first
+			    page reachable. */}
+			<Pagination
+				page={page} pages={pages} total={total} limit={limit}
+				onPage={setPage}
+				onLimit={(n) => { setLimit(n); setPage(1) }}
+			/>
 
 			<Modal open={!!editing} onClose={() => setEditing(null)} title="تعديل المستخدم" size="md">
 				<form onSubmit={handleEdit}>

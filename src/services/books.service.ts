@@ -13,6 +13,7 @@ export const booksService = {
 		isbn?: string
 		pages?: number
 		publish_year?: string
+		pdf_url?: string
 		part_number?: number
 		parts?: number
 		translations: {
@@ -22,6 +23,10 @@ export const booksService = {
 			publisher?: string
 			description?: string
 			series?: string
+			slug?: string
+			meta_title?: string
+			meta_description?: string
+			og_image_id?: string | null
 			is_default: boolean
 		}[]
 	}) => api.post<Book>("/books", body),
@@ -32,6 +37,8 @@ export const booksService = {
 		isbn: string
 		pages: number
 		publish_year: string
+		// null clears the stored URL (PATCH: undefined = leave unchanged)
+		pdf_url: string | null
 		part_number: number
 		parts: number
 		translations: {
@@ -41,6 +48,10 @@ export const booksService = {
 			publisher?: string
 			description?: string
 			series?: string
+			slug?: string
+			meta_title?: string
+			meta_description?: string
+			og_image_id?: string | null
 			is_default: boolean
 		}[]
 	}>) => api.patch<Book>(`/books/${id}`, body),

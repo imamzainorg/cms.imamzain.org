@@ -28,7 +28,8 @@ export const galleryService = {
 
 	update: (id: string, body: Partial<{
 		media_id: string
-		category_id: string
+		// null disconnects the category (PATCH: undefined = leave unchanged)
+		category_id: string | null
 		taken_at: string
 		author: string
 		tags: string[]

@@ -56,6 +56,26 @@ export function useDeleteSubscriber() {
 		mutationFn: (id: string) => newsletterService.remove(id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.newsletter.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
+		},
+	})
+}
+
+export function useSubscribersTrash(params: { page?: number; limit?: number } = {}) {
+	return useQuery({
+		queryKey: queryKeys.trash.resource("newsletter-subscribers", params),
+		queryFn: async () => (await newsletterService.trash(params)).data,
+		placeholderData: keepPreviousData,
+	})
+}
+
+export function useRestoreSubscriber() {
+	const qc = useQueryClient()
+	return useMutation({
+		mutationFn: (id: string) => newsletterService.restore(id),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.newsletter.all })
+			qc.invalidateQueries({ queryKey: queryKeys.trash.all })
 		},
 	})
 }

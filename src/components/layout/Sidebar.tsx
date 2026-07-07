@@ -24,9 +24,14 @@ import {
 	Settings as SettingsIcon,
 	List,
 	Trash2,
+	LayoutTemplate,
+	Store,
+	AudioLines,
+	MicVocal,
 	type LucideIcon,
 } from "lucide-react"
 import Image from "next/image"
+import { useAuthStore } from "@/store/auth"
 
 type Child = {
 	name: string
@@ -39,6 +44,12 @@ type Item = {
 	href: string
 	icon: LucideIcon
 	children?: Child[]
+	/**
+	 * Show the item when the user holds ANY of these permission strings
+	 * (from the API's `<resource>:<action>` catalogue). Omit to always show.
+	 * The server still enforces — this only declutters the nav.
+	 */
+	permissions?: string[]
 }
 
 const groups: { title: string; items: Item[] }[] = [
@@ -55,6 +66,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "المقالات",
 				href: "/dashboard/posts",
 				icon: FileText,
+				permissions: ["posts:read", "posts:create", "posts:update", "posts:delete"],
 				children: [
 					{ name: "كل المقالات", href: "/dashboard/posts", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/post-categories", icon: FolderTree },
@@ -65,6 +77,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "المكتبة",
 				href: "/dashboard/books",
 				icon: BookOpen,
+				permissions: ["books:create", "books:update", "books:delete"],
 				children: [
 					{ name: "كل الكتب", href: "/dashboard/books", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/book-categories", icon: FolderTree },
@@ -75,6 +88,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "الأبحاث",
 				href: "/dashboard/papers",
 				icon: GraduationCap,
+				permissions: ["academic-papers:create", "academic-papers:update", "academic-papers:delete"],
 				children: [
 					{ name: "كل الأبحاث", href: "/dashboard/papers", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/paper-categories", icon: FolderTree },
@@ -85,38 +99,85 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "معرض الصور",
 				href: "/dashboard/gallery",
 				icon: ImageIcon,
+				permissions: ["gallery:create", "gallery:update", "gallery:delete"],
 				children: [
 					{ name: "كل الصور", href: "/dashboard/gallery", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/gallery-categories", icon: FolderTree },
 					{ name: "سلة المهملات", href: "/dashboard/gallery/trash", icon: Trash2 },
 				],
 			},
-			{ name: "مكتبة الوسائط", href: "/dashboard/media", icon: Library },
-			{ name: "الأحاديث اليومية", href: "/dashboard/daily-hadiths", icon: BookOpenText },
+			{
+				name: "الصوتيات",
+				href: "/dashboard/audios",
+				icon: AudioLines,
+				permissions: ["audios:read", "audios:create", "audios:update", "audios:delete"],
+				children: [
+					{ name: "كل الصوتيات", href: "/dashboard/audios", icon: List },
+					{ name: "المحاضرون", href: "/dashboard/speakers", icon: MicVocal },
+					{ name: "سلة المهملات", href: "/dashboard/audios/trash", icon: Trash2 },
+				],
+			},
+			{
+				name: "الصفحات الثابتة",
+				href: "/dashboard/static-pages",
+				icon: LayoutTemplate,
+				permissions: ["static-pages:read", "static-pages:create", "static-pages:update", "static-pages:delete"],
+				children: [
+					{ name: "كل الصفحات", href: "/dashboard/static-pages", icon: List },
+					{ name: "سلة المهملات", href: "/dashboard/static-pages/trash", icon: Trash2 },
+				],
+			},
+			{
+				name: "منافذ البيع",
+				href: "/dashboard/stores",
+				icon: Store,
+				permissions: ["stores:create", "stores:update", "stores:delete"],
+				children: [
+					{ name: "كل المنافذ", href: "/dashboard/stores", icon: List },
+					{ name: "سلة المهملات", href: "/dashboard/stores/trash", icon: Trash2 },
+				],
+			},
+			{
+				name: "مكتبة الوسائط",
+				href: "/dashboard/media",
+				icon: Library,
+				permissions: ["media:read", "media:create", "media:update", "media:delete"],
+			},
+			{
+				name: "الأحاديث اليومية",
+				href: "/dashboard/daily-hadiths",
+				icon: BookOpenText,
+				permissions: ["daily-hadiths:read", "daily-hadiths:create", "daily-hadiths:update", "daily-hadiths:delete"],
+				children: [
+					{ name: "كل الأحاديث", href: "/dashboard/daily-hadiths", icon: List },
+					{ name: "سلة المهملات", href: "/dashboard/daily-hadiths/trash", icon: Trash2 },
+				],
+			},
 		],
 	},
 	{
 		title: "النماذج والتفاعل",
 		items: [
-			{ name: "رسائل التواصل", href: "/dashboard/contacts", icon: Mail },
-			{ name: "طلبات الزيارة", href: "/dashboard/proxy-visits", icon: Users },
+			{ name: "رسائل التواصل", href: "/dashboard/contacts", icon: Mail, permissions: ["forms:read"] },
+			{ name: "طلبات الزيارة", href: "/dashboard/proxy-visits", icon: Users, permissions: ["forms:read"] },
 			{
 				name: "النشرة البريدية",
 				href: "/dashboard/newsletter",
 				icon: Newspaper,
+				permissions: ["newsletter:read"],
 				children: [{ name: "الحملات", href: "/dashboard/campaigns" }],
 			},
-			{ name: "المسابقات", href: "/dashboard/contest", icon: Trophy },
+			{ name: "المسابقات", href: "/dashboard/contest", icon: Trophy, permissions: ["contest:read"] },
 		],
 	},
 	{
 		title: "الإدارة",
 		items: [
-			{ name: "المستخدمون", href: "/dashboard/users", icon: Users },
-			{ name: "الأدوار والصلاحيات", href: "/dashboard/roles", icon: Shield },
-			{ name: "اللغات", href: "/dashboard/languages", icon: Globe },
-			{ name: "إعدادات الموقع", href: "/dashboard/settings", icon: SettingsIcon },
-			{ name: "سجلات التدقيق", href: "/dashboard/audit-logs", icon: ClipboardList },
+			{ name: "المستخدمون", href: "/dashboard/users", icon: Users, permissions: ["users:read"] },
+			{ name: "الأدوار والصلاحيات", href: "/dashboard/roles", icon: Shield, permissions: ["roles:read"] },
+			{ name: "اللغات", href: "/dashboard/languages", icon: Globe, permissions: ["languages:read"] },
+			{ name: "إعدادات الموقع", href: "/dashboard/settings", icon: SettingsIcon, permissions: ["settings:read"] },
+			{ name: "سجلات التدقيق", href: "/dashboard/audit-logs", icon: ClipboardList, permissions: ["audit-logs:read"] },
 			{ name: "حسابي", href: "/dashboard/profile", icon: UserCircle },
 		],
 	},
@@ -145,6 +206,18 @@ type SidebarProps = {
 export default function Sidebar({ onNavigate, mobile = false }: SidebarProps) {
 	const pathname = usePathname()
 	const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({})
+	const userPermissions = useAuthStore((s) => s.user?.permissions)
+
+	// Fail open when permissions haven't loaded (undefined) so a transient
+	// /auth/me hiccup doesn't blank the nav; the server still enforces.
+	const canSee = (item: Item) =>
+		!item.permissions ||
+		!userPermissions ||
+		item.permissions.some((p) => userPermissions.includes(p))
+
+	const visibleGroups = groups
+		.map((group) => ({ ...group, items: group.items.filter(canSee) }))
+		.filter((group) => group.items.length > 0)
 
 	const isOpenFor = (item: Item) => {
 		if (item.href in manualOverrides) return manualOverrides[item.href]
@@ -202,7 +275,7 @@ export default function Sidebar({ onNavigate, mobile = false }: SidebarProps) {
 				</div>
 
 				<nav className="flex-1 px-3 py-4 space-y-5">
-					{groups.map((group) => (
+					{visibleGroups.map((group) => (
 						<div key={group.title}>
 							{/* Section title — Arabic Naskh at 11.5px / 600, full-foreground so it
 							    actually reads as a section header (the original uppercase Latin-mono

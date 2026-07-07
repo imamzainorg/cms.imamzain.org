@@ -32,28 +32,36 @@ function wrapped(client: QueryClient) {
 }
 
 describe("proxy-visits hooks", () => {
-	it("useProxyVisitsList paginates", async () => {
-		server.use(http.get(`${API}/forms/proxy-visits`, () => HttpResponse.json(wrap(paginated([])))))
+	it("useProxyVisitsList passes page/limit/status through to the server", async () => {
+		let captured: URL | null = null
+		server.use(http.get(`${API}/forms/proxy-visits`, ({ request }) => {
+			captured = new URL(request.url)
+			return HttpResponse.json(wrap(paginated([])))
+		}))
 		const client = buildQueryClient()
-		const { result } = renderHook(() => useProxyVisitsList({}), { wrapper: wrapped(client) })
+		const { result } = renderHook(
+			() => useProxyVisitsList({ page: 2, limit: 10, status: "APPROVED" }),
+			{ wrapper: wrapped(client) },
+		)
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
+		expect(captured!.searchParams.get("page")).toBe("2")
+		expect(captured!.searchParams.get("limit")).toBe("10")
+		expect(captured!.searchParams.get("status")).toBe("APPROVED")
 	})
 
-	it("count filters client-side (backend rejects ?status= as non-whitelisted)", async () => {
-		let capturedStatus: string | null = null
-		const items = [
-			{ id: "1", name: "a", phone: null, country: null, status: "PENDING" },
-			{ id: "2", name: "b", phone: null, country: null, status: "PENDING" },
-			{ id: "3", name: "c", phone: null, country: null, status: "APPROVED" },
-		]
+	it("count sends ?status= to the server and returns pagination.total", async () => {
+		// `ProxyVisitQueryDto` whitelists `?status=` now — the count is a
+		// `limit=1` probe that reads the server-filtered `pagination.total`.
+		let captured: URL | null = null
 		server.use(http.get(`${API}/forms/proxy-visits`, ({ request }) => {
-			capturedStatus = new URL(request.url).searchParams.get("status")
-			return HttpResponse.json(wrap(paginated(items, { total: items.length })))
+			captured = new URL(request.url)
+			return HttpResponse.json(wrap(paginated([], { total: 2 })))
 		}))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useProxyVisitCount({ status: "PENDING" }), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
-		expect(capturedStatus).toBeNull()
+		expect(captured!.searchParams.get("status")).toBe("PENDING")
+		expect(captured!.searchParams.get("limit")).toBe("1")
 		expect(result.current.data).toBe(2)
 	})
 

@@ -17,15 +17,16 @@ const mockBook = {
 	isbn: "978-0-06-112008-4",
 	pages: 300,
 	publish_year: "2020",
+	pdf_url: "https://example.com/sahifa.pdf",
 	part_number: null,
 	parts: null,
 	views: 0,
 	created_at: "2024-01-01T00:00:00Z",
 	updated_at: "2024-01-01T00:00:00Z",
 	book_translations: [
-		{ lang: "en", title: "Sahifa", author: "Imam Zain", publisher: "Dar", description: null, series: null, is_default: true },
+		{ lang: "en", title: "Sahifa", author: "Imam Zain", publisher: "Dar", description: null, series: null, slug: "sahifa", meta_title: null, meta_description: null, og_image_id: null, is_default: true },
 	],
-	translation: { lang: "en", title: "Sahifa", author: "Imam Zain", publisher: "Dar", description: null, series: null, is_default: true },
+	translation: { lang: "en", title: "Sahifa", author: "Imam Zain", publisher: "Dar", description: null, series: null, slug: "sahifa", meta_title: null, meta_description: null, og_image_id: null, is_default: true },
 }
 
 const mockPaper = {
@@ -41,6 +42,19 @@ const mockPaper = {
 	translation: { lang: "en", title: "Research Paper", abstract: "Abstract", authors: ["Author One"], keywords: ["Islam"], publication_venue: "Journal", page_count: 20, is_default: true },
 }
 
+// GET /academic-papers is a LIST payload — the API drops `abstract` from list
+// translations (slim lists, round 15.2). Detail keeps the full shape.
+function stripAbstract<T extends { abstract?: unknown }>(t: T): Omit<T, "abstract"> {
+	const slim = { ...t }
+	delete slim.abstract
+	return slim
+}
+const mockPaperListItem = {
+	...mockPaper,
+	academic_paper_translations: mockPaper.academic_paper_translations.map(stripAbstract),
+	translation: stripAbstract(mockPaper.translation),
+}
+
 const server = setupServer(
 	http.get(`${API}/books`, () => HttpResponse.json(wrap(paginated([mockBook])))),
 	http.get(`${API}/books/b1`, () => HttpResponse.json(wrap(mockBook))),
@@ -48,7 +62,7 @@ const server = setupServer(
 	http.patch(`${API}/books/b1`, () => HttpResponse.json(wrap({ ...mockBook, isbn: "000" }))),
 	http.delete(`${API}/books/b1`, () => HttpResponse.json(wrap({ message: "Deleted" }))),
 
-	http.get(`${API}/academic-papers`, () => HttpResponse.json(wrap(paginated([mockPaper])))),
+	http.get(`${API}/academic-papers`, () => HttpResponse.json(wrap(paginated([mockPaperListItem])))),
 	http.get(`${API}/academic-papers/pp1`, () => HttpResponse.json(wrap(mockPaper))),
 	http.post(`${API}/academic-papers`, () => HttpResponse.json(wrap(mockPaper), { status: 201 })),
 	http.patch(`${API}/academic-papers/pp1`, () => HttpResponse.json(wrap({ ...mockPaper, published_year: "2024" }))),
@@ -63,7 +77,9 @@ describe("booksService", () => {
 	it("lists books", async () => {
 		const { data } = await booksService.list()
 		expect(data.items[0].isbn).toBe("978-0-06-112008-4")
+		expect(data.items[0].pdf_url).toBe("https://example.com/sahifa.pdf")
 		expect(data.items[0].book_translations[0].title).toBe("Sahifa")
+		expect(data.items[0].book_translations[0].slug).toBe("sahifa")
 	})
 	it("creates a book with snake_case payload", async () => {
 		const { data } = await booksService.create({

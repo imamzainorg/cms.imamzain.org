@@ -5,7 +5,7 @@
 	// code: the CMS is a client-rendered app (JWT in localStorage) whose every
 	// API call is made by the BROWSER straight to api.imamzain.org. There is no
 	// Worker script here on purpose. Deploy: `bun run deploy`.
-	"name": "imamzain-cms",
+	"name": "cms-imamzain-org",
 	"compatibility_date": "2026-09-01",
 	// Every version also gets its own preview URL on workers.dev. The API only
 	// answers browsers whose origin is in its ALLOWED_ORIGINS (CORS), so a
@@ -19,11 +19,10 @@
 		// silent fall-back to another page.
 		"not_found_handling": "404-page"
 	},
-	// Attach the production hostname here (or in the dashboard) once decided.
-	// The EXACT origin then has to be added to ALLOWED_ORIGINS in the API repo's
-	// worker/wrangler.jsonc and the API Worker redeployed, or every call from the
-	// CMS is blocked by CORS. The API's list currently has cms.imamzain.com.
-	// "routes": [{ "pattern": "cms.imamzain.org", "custom_domain": true }],
+	// The production hostname. It must also be listed in ALLOWED_ORIGINS in the
+	// API repo's worker/wrangler.jsonc (and the API Worker redeployed), or every
+	// call from the CMS is blocked by CORS.
+	"routes": [{ "pattern": "cms.imamzain.org", "custom_domain": true }],
 	"observability": {
 		"enabled": true
 	}

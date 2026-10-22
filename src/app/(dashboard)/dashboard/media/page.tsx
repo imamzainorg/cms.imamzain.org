@@ -198,7 +198,7 @@ export default function MediaPage() {
 					variant="card"
 					icon={ImageIcon}
 					title={hasFilters ? "لا توجد نتائج" : "المكتبة فارغة"}
-					description={hasFilters ? "جرّب كلمات بحث مختلفة أو نوعاً آخر." : "ارفع صوراً وملفات لتستخدمها داخل المقالات والمحتوى."}
+					description={hasFilters ? "جرّب كلمات بحث مختلفة أو نوعاً آخر." : "ارفع صوراً وملفات لتستخدمها داخل الأخبار والمحتوى."}
 					action={!hasFilters && (
 						<label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90">
 							<Upload className="h-4 w-4" />ارفع أول ملف

@@ -13,11 +13,11 @@ function EditPost({ id }: { id: string }) {
 	const { data: post, isLoading } = usePost(id)
 
 	if (isLoading) return <EditRouteSpinner />
-	if (!post) return <p className="text-gray-500">لم يتم العثور على المقالة.</p>
+	if (!post) return <p className="text-gray-500">لم يتم العثور على الخبر.</p>
 
 	return (
 		<div>
-			<h1 className="text-3xl font-bold text-gray-900 mb-6">تعديل المقالة</h1>
+			<h1 className="text-3xl font-bold text-gray-900 mb-6">تعديل الخبر</h1>
 			<PostForm post={post} />
 			<div className="mt-6">
 				<AuditPanel resource_type="post" resource_id={post.id} />

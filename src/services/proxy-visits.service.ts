@@ -6,6 +6,13 @@ export const proxyVisitsService = {
 		page?: number
 		limit?: number
 		status?: "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
+		/** Name or phone, case-insensitive substring. */
+		search?: string
+		/** ISO 3166-1 alpha-2, upper-case. */
+		country?: string
+		/** ISO timestamps bounding `submitted_at`. */
+		from?: string
+		to?: string
 	}) => api.get<PaginatedResponse<ProxyVisit>>("/forms/proxy-visits", { params }),
 
 	update: (id: string, body: Partial<{

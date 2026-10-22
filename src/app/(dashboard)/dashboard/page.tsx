@@ -69,7 +69,7 @@ export default function DashboardPage() {
 		pickTranslation(p.post_translations, p.translation)?.title || "بدون عنوان"
 
 	const contentStats = [
-		{ label: "المقالات", value: stats?.posts.total ?? 0, icon: FileText, href: "/dashboard/posts" },
+		{ label: "الأخبار", value: stats?.posts.total ?? 0, icon: FileText, href: "/dashboard/posts" },
 		{ label: "الكتب", value: stats?.library.books ?? 0, icon: BookOpen, href: "/dashboard/books" },
 		{ label: "الأبحاث", value: stats?.library.academic_papers ?? 0, icon: GraduationCap, href: "/dashboard/papers" },
 		{ label: "صور المعرض", value: stats?.library.gallery_images ?? 0, icon: ImageIcon, href: "/dashboard/gallery" },
@@ -166,7 +166,7 @@ export default function DashboardPage() {
 								<strong className="text-white font-semibold tabular-nums arabic-nums">
 									{formatArNumber(postsBreakdown.published)}
 								</strong>{" "}
-								مقالة من أصل{" "}
+								خبر من أصل{" "}
 								<strong className="text-white font-semibold tabular-nums arabic-nums">
 									{formatArNumber(postsBreakdown.total)}
 								</strong>{" "}
@@ -182,7 +182,7 @@ export default function DashboardPage() {
 							href="/dashboard/posts/new"
 							className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-primary text-sm font-semibold rounded-md hover:bg-white/95 hover:shadow-lg hover:-translate-y-px transition-all shadow-md"
 						>
-							<Plus className="h-4 w-4" strokeWidth={1.6} />مقالة جديدة
+							<Plus className="h-4 w-4" strokeWidth={1.6} />خبر جديد
 						</Link>
 						<Link
 							href="/dashboard/books/new"
@@ -304,7 +304,7 @@ export default function DashboardPage() {
 					<div className="flex items-center gap-2">
 						<div className="h-5 w-0.5 rounded-full bg-linear-to-b from-primary to-[hsl(var(--primary)/0.4)]" />
 						<h2 className="text-[15px] font-semibold text-foreground">
-							آخر المقالات
+							آخر الأخبار
 						</h2>
 					</div>
 					<Link
@@ -319,14 +319,14 @@ export default function DashboardPage() {
 				{recentPosts.length === 0 ? (
 					<EmptyState
 						icon={FileText}
-						title="لا توجد مقالات بعد"
+						title="لا توجد أخبار بعد"
 						description="ابدأ بإنشاء مقالتك الأولى لتظهر هنا."
 						action={
 							<Link
 								href="/dashboard/posts/new"
 								className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-[hsl(var(--primary)/0.92)] shadow-soft hover:shadow-raise transition-all"
 							>
-								<Plus className="h-4 w-4" strokeWidth={1.6} />مقالة جديدة
+								<Plus className="h-4 w-4" strokeWidth={1.6} />خبر جديد
 							</Link>
 						}
 					/>

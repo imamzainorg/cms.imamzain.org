@@ -14,6 +14,9 @@ type Props = {
 	open: boolean
 	onClose: () => void
 	onSelect: (media: MediaRecord) => void
+	/** Lets several files be ticked at once; the confirm button then calls this instead of `onSelect`. */
+	multiple?: boolean
+	onSelectMany?: (media: MediaRecord[]) => void
 	/** Restrict to one of: "image", "any". Defaults to image. */
 	accept?: "image" | "any"
 	title?: string
@@ -23,6 +26,8 @@ export default function MediaPicker({
 	open,
 	onClose,
 	onSelect,
+	multiple = false,
+	onSelectMany,
 	accept = "image",
 	title = "اختر ملفاً",
 }: Props) {
@@ -34,6 +39,7 @@ export default function MediaPicker({
 	const [page, setPage] = useState(1)
 	const [hasMore, setHasMore] = useState(false)
 	const [selected, setSelected] = useState<MediaRecord | null>(null)
+	const [ticked, setTicked] = useState<MediaRecord[]>([])
 
 	// Push search to the server (per API integration notes: trigram indexes
 	// keep `?search=` cheap as the library grows; client-side filtering on a
@@ -61,6 +67,7 @@ export default function MediaPicker({
 	useEffect(() => {
 		if (!open) return
 		setSelected(null)
+		setTicked([])
 		setSearch("")
 		setDebouncedSearch("")
 		setPage(1)
@@ -101,7 +108,11 @@ export default function MediaPicker({
 			toast.success(`تم رفع ${files.length} ملف${files.length > 1 ? "ات" : ""}`)
 			await load(1, true, debouncedSearch)
 			setPage(1)
-			if (lastUploaded) setSelected(lastUploaded)
+			if (lastUploaded) {
+					const added = lastUploaded
+					if (multiple) setTicked((prev) => (prev.some((m) => m.id === added.id) ? prev : [...prev, added]))
+					else setSelected(added)
+				}
 		} catch (err) {
 			toast.error(getErrorMessage(err, "فشل الرفع"))
 		} finally {
@@ -196,13 +207,15 @@ export default function MediaPicker({
 						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
 							{filtered.map((item) => {
 								const isImage = item.mime_type?.startsWith("image/")
-								const isSel = selected?.id === item.id
+								const isSel = multiple ? ticked.some((m) => m.id === item.id) : selected?.id === item.id
 								return (
 									<button
 										key={item.id}
 										type="button"
-										onClick={() => setSelected(item)}
-										onDoubleClick={() => onSelect(item)}
+										onClick={() => multiple
+												? setTicked((prev) => (prev.some((m) => m.id === item.id) ? prev.filter((m) => m.id !== item.id) : [...prev, item]))
+												: setSelected(item)}
+											onDoubleClick={() => { if (!multiple) onSelect(item) }}
 										className={`group relative aspect-square bg-white border-2 rounded-lg overflow-hidden text-left transition-all ${isSel ? "border-primary ring-2 ring-primary/30" : "border-transparent hover:border-gray-300"}`}
 									>
 										{isImage ? (
@@ -260,9 +273,11 @@ export default function MediaPicker({
 
 				<div className="flex items-center justify-between px-6 py-3 border-t border-[hsl(var(--border))] bg-white">
 					<div className="text-sm text-[hsl(var(--foreground-muted))]">
-						{selected
-							? <span>المختار: <span className="font-medium text-foreground">{selected.filename}</span></span>
-							: <span>اختر ملفاً (نقر مزدوج للاختيار السريع)</span>}
+						{multiple
+							? <span>{ticked.length ? `تم اختيار ${ticked.length} ملف` : "اضغط على الملفات لاختيارها"}</span>
+							: selected
+								? <span>المختار: <span className="font-medium text-foreground">{selected.filename}</span></span>
+								: <span>اختر ملفاً (نقر مزدوج للاختيار السريع)</span>}
 					</div>
 					<div className="flex gap-2">
 						<button
@@ -272,11 +287,11 @@ export default function MediaPicker({
 							إلغاء
 						</button>
 						<button
-							onClick={() => selected && onSelect(selected)}
-							disabled={!selected}
+							onClick={() => (multiple ? ticked.length && onSelectMany?.(ticked) : selected && onSelect(selected))}
+							disabled={multiple ? ticked.length === 0 : !selected}
 							className="cursor-pointer px-4 py-1.5 text-sm font-semibold bg-primary text-white rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 						>
-							اختيار
+							{multiple && ticked.length > 0 ? `إضافة (${ticked.length})` : "اختيار"}
 						</button>
 					</div>
 				</div>

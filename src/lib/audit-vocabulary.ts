@@ -16,7 +16,7 @@ export type AuditOptionGroup = { label: string; options: AuditOption[] }
 
 /** `audit_logs.resource_type` values, with the Arabic noun used in the feed. */
 export const AUDIT_RESOURCE_OPTIONS: AuditOption[] = [
-	{ value: "post", label: "مقالات" },
+	{ value: "post", label: "أخبار" },
 	{ value: "book", label: "كتب" },
 	{ value: "academic_paper", label: "أبحاث" },
 	{ value: "gallery_image", label: "صور المعرض" },
@@ -26,7 +26,7 @@ export const AUDIT_RESOURCE_OPTIONS: AuditOption[] = [
 	{ value: "store", label: "منافذ البيع (المدن)" },
 	{ value: "store_location", label: "منافذ البيع (المواقع)" },
 	{ value: "daily_hadith", label: "أحاديث يومية" },
-	{ value: "post_category", label: "تصنيفات المقالات" },
+	{ value: "post_category", label: "تصنيفات الأخبار" },
 	{ value: "book_category", label: "تصنيفات الكتب" },
 	{ value: "academic_paper_category", label: "تصنيفات الأبحاث" },
 	{ value: "gallery_category", label: "تصنيفات المعرض" },
@@ -54,7 +54,7 @@ const CRUD_PUBLISH = [...CRUD, "PUBLISHED", "UNPUBLISHED"]
 
 /** Resources that follow the PREFIX_VERB pattern: [stored prefix, group label, verbs]. */
 const PATTERNED: Array<[string, string, string[]]> = [
-	["POST", "المقالات", CRUD_PUBLISH],
+	["POST", "الأخبار", CRUD_PUBLISH],
 	["BOOK", "الكتب", CRUD_PUBLISH],
 	["ACADEMIC_PAPER", "الأبحاث", CRUD_PUBLISH],
 	["GALLERY_IMAGE", "صور المعرض", CRUD_PUBLISH],
@@ -63,7 +63,7 @@ const PATTERNED: Array<[string, string, string[]]> = [
 	["DAILY_HADITH", "الأحاديث اليومية", CRUD],
 	["SPEAKER", "المتحدثون", CRUD],
 	["STORE", "منافذ البيع", CRUD],
-	["POST_CATEGORY", "تصنيفات المقالات", CRUD],
+	["POST_CATEGORY", "تصنيفات الأخبار", CRUD],
 	["BOOK_CATEGORY", "تصنيفات الكتب", CRUD],
 	["ACADEMIC_PAPER_CATEGORY", "تصنيفات الأبحاث", CRUD],
 	["GALLERY_CATEGORY", "تصنيفات المعرض", CRUD],
@@ -184,7 +184,7 @@ export function specialAuditLabel(log: Pick<AuditLog, "action" | "changes">): st
 	}
 	// The minute cron flips a due scheduled post live: no human did it.
 	if (log.action === "POST_PUBLISHED" && changes.scheduled === true) {
-		return "نشر تلقائي لمقالة بحسب الجدولة"
+		return "نشر تلقائي لخبر بحسب الجدولة"
 	}
 	return base ?? null
 }

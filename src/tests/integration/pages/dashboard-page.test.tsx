@@ -77,6 +77,6 @@ describe("DashboardPage", () => {
 			http.get(`${API}/posts/admin`, () => HttpResponse.json(wrap(paginated([])))),
 		)
 		renderWithQueryClient(<DashboardPage />)
-		await waitFor(() => expect(screen.getByText(/لا توجد مقالات بعد/)).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText(/لا توجد أخبار بعد/)).toBeInTheDocument())
 	})
 })

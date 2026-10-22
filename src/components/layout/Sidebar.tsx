@@ -63,12 +63,12 @@ const groups: { title: string; items: Item[] }[] = [
 		title: "المحتوى",
 		items: [
 			{
-				name: "المقالات",
+				name: "الأخبار",
 				href: "/dashboard/posts",
 				icon: FileText,
 				permissions: ["posts:read", "posts:create", "posts:update", "posts:delete"],
 				children: [
-					{ name: "كل المقالات", href: "/dashboard/posts", icon: List },
+					{ name: "كل الأخبار", href: "/dashboard/posts", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/post-categories", icon: FolderTree },
 					{ name: "سلة المهملات", href: "/dashboard/posts/trash", icon: Trash2 },
 				],

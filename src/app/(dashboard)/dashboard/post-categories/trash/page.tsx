@@ -10,7 +10,7 @@ import TrashList from "@/components/trash/TrashList"
 export default function PostCategoriesTrashPage() {
 	return (
 		<TrashList<PostCategory>
-			title="سلة المهملات — تصنيفات المقالات"
+			title="سلة المهملات — تصنيفات الأخبار"
 			description="التصنيفات المحذوفة. الروابط المختصرة تُستعاد إن لم تكن مأخوذة."
 			singular="التصنيف"
 			icon={Trash2}

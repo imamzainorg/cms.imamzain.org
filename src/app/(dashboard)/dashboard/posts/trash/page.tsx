@@ -10,12 +10,12 @@ import TrashList from "@/components/trash/TrashList"
 export default function PostsTrashPage() {
 	return (
 		<TrashList<Post>
-			title="سلة المهملات — المقالات"
-			description="المقالات المحذوفة. الروابط المختصرة تُستعاد إن لم تكن مأخوذة من قبل مقالة أخرى."
-			singular="المقالة"
+			title="سلة المهملات — الأخبار"
+			description="الأخبار المحذوفة. الروابط المختصرة تُستعاد إن لم تكن مأخوذة من قبل خبر آخر."
+			singular="الخبر"
 			icon={Trash2}
 			backHref="/dashboard/posts"
-			backLabel="العودة إلى المقالات"
+			backLabel="العودة إلى الأخبار"
 			resource="posts"
 			rootKey={queryKeys.posts.all}
 			service={{ trash: postsService.trash, restore: postsService.restore }}

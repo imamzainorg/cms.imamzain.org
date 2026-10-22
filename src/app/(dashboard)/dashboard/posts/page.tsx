@@ -106,9 +106,9 @@ export default function PostsPage() {
 
 	const handleDelete = async (post: Post) => {
 		const ok = await confirm({
-			title: `حذف هذه المقالة؟`,
+			title: `حذف هذه الخبر؟`,
 			description: post.is_published
-				? "المقالة منشورة حالياً وستختفي من الموقع فوراً."
+				? "الخبر منشور حالياً وسيختفي من الموقع فوراً."
 				: "ستُنقل إلى سلة المهملات. يمكنك استعادتها من صفحة المهملات.",
 			confirmText: "حذف",
 			tone: "danger",
@@ -139,7 +139,7 @@ export default function PostsPage() {
 		const ids = Array.from(selected)
 		if (!ids.length) return
 		const ok = await confirm({
-			title: is_published ? `نشر ${ids.length} مقالة؟` : `سحب نشر ${ids.length} مقالة؟`,
+			title: is_published ? `نشر ${ids.length} خبر؟` : `سحب نشر ${ids.length} خبر؟`,
 			description: "سيُسجَّل كل تغيير في سجل التدقيق.",
 			confirmText: is_published ? "نشر" : "سحب",
 			tone: is_published ? "success" : "warning",
@@ -150,7 +150,7 @@ export default function PostsPage() {
 			{
 				onSuccess: ({ data }) => {
 					const verb = is_published ? "نُشرت" : "سُحبت"
-					const main = `${data.affected} مقالة ${verb}`
+					const main = `${data.affected} خبر ${verb}`
 					const note = data.skipped.length > 0
 						? ` — تجاوز ${data.skipped.length} (سبق نشرها أو محذوفة)`
 						: ""
@@ -166,7 +166,7 @@ export default function PostsPage() {
 		const ids = Array.from(selected)
 		if (!ids.length) return
 		const ok = await confirm({
-			title: `حذف ${ids.length} مقالة؟`,
+			title: `حذف ${ids.length} خبر؟`,
 			description: "ستُنقل إلى سلة المهملات. يمكنك استعادتها لاحقاً.",
 			confirmText: "حذف",
 			tone: "danger",
@@ -174,7 +174,7 @@ export default function PostsPage() {
 		if (!ok) return
 		bulkDelete.mutate(ids, {
 			onSuccess: ({ data }) => {
-				const main = `تم حذف ${data.affected} مقالة`
+				const main = `تم حذف ${data.affected} خبر`
 				const note = data.skipped.length > 0
 					? ` — تجاوز ${data.skipped.length} (محذوفة بالفعل)`
 					: ""
@@ -208,8 +208,8 @@ export default function PostsPage() {
 	return (
 		<div className="space-y-6">
 			<PageHeader
-				title="المقالات"
-				description="أنشئ ونشر المقالات بعدة لغات. اسحب الصور والمحتوى من مكتبة الوسائط."
+				title="الأخبار"
+				description="أنشئ ونشر الأخبار بعدة لغات. اسحب الصور والمحتوى من مكتبة الوسائط."
 				icon={FileText}
 				actions={
 					<div className="flex gap-2">
@@ -223,7 +223,7 @@ export default function PostsPage() {
 							onClick={() => router.push("/dashboard/posts/new")}
 							className="cursor-pointer inline-flex items-center gap-2 px-4 py-1.5 bg-primary text-white text-sm rounded-md hover:bg-[hsl(var(--primary)/0.92)] shadow-soft hover:shadow-raise transition-all active:translate-y-px"
 						>
-							<Plus className="h-4 w-4" strokeWidth={1.6} />مقالة جديدة
+							<Plus className="h-4 w-4" strokeWidth={1.6} />خبر جديد
 						</button>
 					</div>
 				}
@@ -371,7 +371,7 @@ export default function PostsPage() {
 				<EmptyState
 					variant="card"
 					icon={FileText}
-					title={hasFilters ? "لا توجد نتائج للفلاتر الحالية" : "لا توجد مقالات بعد"}
+					title={hasFilters ? "لا توجد نتائج للفلاتر الحالية" : "لا توجد أخبار بعد"}
 					description={
 						hasFilters
 							? "جرّب تعديل الفلاتر أو مسحها."
@@ -383,7 +383,7 @@ export default function PostsPage() {
 							className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-[hsl(var(--primary)/0.92)] shadow-soft hover:shadow-raise transition-all"
 						>
 							<Plus className="h-4 w-4" strokeWidth={1.6} />
-							{hasFilters ? "أنشئ مقالة جديدة" : "ابدأ بأول مقالة"}
+							{hasFilters ? "أنشئ خبر جديد" : "ابدأ بأول خبر"}
 						</button>
 					}
 				/>

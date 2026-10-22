@@ -8,7 +8,8 @@ import { z } from "zod"
 import axios from "axios"
 import type { Post } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage, getErrorCode } from "@/lib/api"
+import { getErrorMessage, getErrorCode, getErrorStatus } from "@/lib/api"
+import { galleryService } from "@/services/gallery.service"
 import { categoryName, slugify } from "@/lib/i18n"
 import { isoToLocalInput, localInputToIso } from "@/lib/datetime"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
@@ -18,6 +19,7 @@ import { usePostCategoriesList } from "@/lib/queries/post-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 import MediaInput from "@/components/ui/MediaInput"
 import MediaPicker from "@/components/ui/MediaPicker"
+import AttachmentsInput from "@/components/ui/AttachmentsInput"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import { Loader2, Eye, EyeOff, Calendar, Star, Sparkles } from "lucide-react"
 
@@ -35,7 +37,7 @@ const translationSchema = z.object({
 	body: z.string()
 		.min(1, "المحتوى مطلوب")
 		.refine((s) => byteLength(s) <= MAX_BODY_BYTES, {
-			message: `المحتوى كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب). اختصره أو اقسمه إلى مقالات.`,
+			message: `المحتوى كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب). اختصره أو اقسمه إلى أخبار.`,
 		}),
 	is_default: z.boolean(),
 	meta_title: z.string().max(80).optional(),
@@ -46,6 +48,14 @@ const translationSchema = z.object({
 const postFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
 	cover_image_id: z.string().nullable().optional(),
+	attachments: z.array(z.object({
+		id: z.string(),
+		url: z.string(),
+		filename: z.string().optional(),
+		mime_type: z.string().optional(),
+	})),
+	// Media ids (cover and/or attachments) to also add to the public image gallery on save.
+	gallery_ids: z.array(z.string()),
 	slug: z.string()
 		.min(1, "الرابط المختصر مطلوب")
 		.max(SLUG_MAX, `الرابط أطول من ${SLUG_MAX} حرفاً`)
@@ -86,6 +96,8 @@ export default function PostForm({ post }: { post?: Post }) {
 			return {
 				category_id: "",
 				cover_image_id: null,
+				attachments: [],
+				gallery_ids: [],
 				slug: "",
 				is_published: false,
 				is_featured: false,
@@ -108,6 +120,15 @@ export default function PostForm({ post }: { post?: Post }) {
 		return {
 			category_id: post.category_id ?? "",
 			cover_image_id: post.cover_image_id ?? null,
+			gallery_ids: [],
+			attachments: [...(post.post_attachments ?? [])]
+				.sort((a, b) => a.display_order - b.display_order)
+				.map((a) => ({
+					id: a.media_id,
+					url: a.media?.url ?? "",
+					filename: a.media?.filename,
+					mime_type: a.media?.mime_type,
+				})),
 			slug: post.slug ?? "",
 			is_published: post.is_published,
 			is_featured: post.is_featured ?? false,
@@ -174,6 +195,22 @@ export default function PostForm({ post }: { post?: Post }) {
 		})
 	}
 
+	// Adds the ticked images to the gallery; one already there (409) is fine and is skipped quietly.
+	const addToGallery = async (ids: string[], data: PostFormData, fallbackTitle: string) => {
+		let added = 0
+		for (const id of ids) {
+			const file = data.attachments.find((a) => a.id === id)?.filename
+			const title = (file ? file.replace(/\.[^.]+$/, "") : fallbackTitle).slice(0, 500) || "صورة"
+			try {
+				await galleryService.create({ media_id: id, translations: [{ lang: "ar", title }] })
+				added++
+			} catch (err) {
+				if (getErrorStatus(err) !== 409) toast.error(getErrorMessage(err, "تعذّرت إضافة صورة إلى المعرض"))
+			}
+		}
+		if (added) toast.success(`تمت إضافة ${added} صورة إلى معرض الصور`)
+	}
+
 	const onSubmit = (data: PostFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -196,6 +233,8 @@ export default function PostForm({ post }: { post?: Post }) {
 			category_id: data.category_id,
 			// null removes the cover on PATCH; undefined would silently keep it.
 			cover_image_id: data.cover_image_id ?? (post ? null : undefined),
+			// Full ordered list; on PATCH an empty array clears them (omitting would keep them).
+			attachment_ids: data.attachments.length > 0 || post ? data.attachments.map((a) => a.id) : undefined,
 			slug: data.slug,
 			is_published: data.is_published,
 			is_featured: data.is_featured,
@@ -209,9 +248,11 @@ export default function PostForm({ post }: { post?: Post }) {
 				og_image_id: t.og_image_id ?? null,
 			})),
 		}
+		const defaultTitle = data.translations.find((t) => t.is_default)?.title ?? ""
 		const handlers = {
-			onSuccess: () => {
-				toast.success(post ? "تم تحديث المقالة" : "تم إنشاء المقالة")
+			onSuccess: async () => {
+				toast.success(post ? "تم تحديث الخبر" : "تم إنشاء الخبر")
+				await addToGallery(data.gallery_ids, data, defaultTitle)
 				router.push("/dashboard/posts")
 				router.refresh()
 			},
@@ -225,7 +266,7 @@ export default function PostForm({ post }: { post?: Post }) {
 						return
 					}
 				}
-				toast.error(getErrorMessage(e, "فشل حفظ المقالة"))
+				toast.error(getErrorMessage(e, "فشل حفظ الخبر"))
 			},
 		}
 		if (post) {
@@ -286,7 +327,7 @@ export default function PostForm({ post }: { post?: Post }) {
 									<textarea {...register(`translations.${index}.summary`)} rows={2}
 										maxLength={SUMMARY_MAX}
 										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
-										placeholder="جملة أو جملتان تظهران في صفحة قائمة المقالات..."
+										placeholder="جملة أو جملتان تظهران في صفحة قائمة الأخبار..."
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 								</div>
 
@@ -299,7 +340,7 @@ export default function PostForm({ post }: { post?: Post }) {
 											<RichTextEditor
 												value={f.value}
 												onChange={f.onChange}
-												placeholder="ابدأ كتابة محتوى المقالة..."
+												placeholder="ابدأ كتابة محتوى الخبر..."
 												dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
 												onPickImage={pickImageForBody}
 												minHeight={400}
@@ -349,7 +390,7 @@ export default function PostForm({ post }: { post?: Post }) {
 													/>
 												)}
 											/>
-											<p className="mt-1.5 text-xs text-gray-600">تظهر عند مشاركة المقالة في فيسبوك / تويتر. إن تُركت فارغة، تُستخدم صورة الغلاف.</p>
+											<p className="mt-1.5 text-xs text-gray-600">تظهر عند مشاركة الخبر في فيسبوك / تويتر. إن تُركت فارغة، تُستخدم صورة الغلاف.</p>
 										</div>
 									</div>
 								</details>
@@ -372,9 +413,9 @@ export default function PostForm({ post }: { post?: Post }) {
 						/>
 						{errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug.message}</p>}
 						{slugLocked ? (
-							<p className="mt-1 text-[11px] text-amber-700">الرابط ثابت لأن المقالة منشورة (رابطها العام قد شاركه الناس). ألغِ النشر أولاً إن كان لا بد من تغييره.</p>
+							<p className="mt-1 text-[11px] text-amber-700">الرابط ثابت لأن الخبر منشور (رابطه العام قد شاركه الناس). ألغِ النشر أولاً إن كان لا بد من تغييره.</p>
 						) : (
-							<p className="mt-1 text-[11px] text-gray-400">يُولَّد تلقائياً من العنوان الافتراضي. رابط واحد لكل مقالة بجميع اللغات.</p>
+							<p className="mt-1 text-[11px] text-gray-400">يُولَّد تلقائياً من العنوان الافتراضي. رابط واحد لكل خبر بجميع اللغات.</p>
 						)}
 					</div>
 
@@ -392,22 +433,22 @@ export default function PostForm({ post }: { post?: Post }) {
 							<input type="datetime-local" {...register("published_at")} disabled={isPublished} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed" />
 							{errors.published_at && <p className="mt-1 text-sm text-red-600">{errors.published_at.message}</p>}
 							{isPublished ? (
-								<p className="mt-1 text-[11px] text-gray-500">المقالة المنشورة يُسجَّل لها وقت النشر تلقائياً عند الحفظ. لجدولتها لوقت لاحق: ألغِ خيار «منشور» ثم حدّد موعداً.</p>
+								<p className="mt-1 text-[11px] text-gray-500">الخبر المنشور يُسجَّل له وقت النشر تلقائياً عند الحفظ. لجدولته لوقت لاحق: ألغِ خيار «منشور» ثم حدّد موعداً.</p>
 							) : (
-								<p className="mt-1 text-[11px] text-gray-500">حدّد موعداً مستقبلياً (بتوقيت جهازك) لتُنشر المقالة تلقائياً. قد يتأخر النشر حتى دقيقة عن الموعد. اتركه فارغاً لتبقى مسودة.</p>
+								<p className="mt-1 text-[11px] text-gray-500">حدّد موعداً مستقبلياً (بتوقيت جهازك) ليُنشر الخبر تلقائياً. قد يتأخر النشر حتى دقيقة عن الموعد. اتركه فارغاً لتبقى مسودة.</p>
 							)}
 						</div>
 						<label className="flex items-center justify-between cursor-pointer">
 							<span className="flex items-center gap-2 text-sm text-gray-900">
 								<Star className={`h-4 w-4 ${isFeatured ? "fill-amber-400 text-amber-500" : "text-gray-400"}`} />
-								مقالة مميّزة
+								خبر مميّز
 							</span>
 							<input type="checkbox" {...register("is_featured")} className="h-4 w-4 text-primary rounded" />
 						</label>
 						{isFeatured && (
 							<p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 flex items-start gap-2">
 								<Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-								<span>المقالات المميّزة تظهر في القسم الرئيسي من الصفحة الرئيسية على الموقع.</span>
+								<span>الأخبار المميّزة تظهر في القسم الرئيسي من الصفحة الرئيسية على الموقع.</span>
 							</p>
 						)}
 					</div>
@@ -437,12 +478,53 @@ export default function PostForm({ post }: { post?: Post }) {
 								/>
 							)}
 						/>
+						<Controller
+							control={control}
+							name="gallery_ids"
+							render={({ field: g }) => {
+								const cover = watch("cover_image_id")
+								if (!cover) return <></>
+								return (
+									<label className="mt-3 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={g.value.includes(cover)}
+											onChange={(e) => g.onChange(e.target.checked ? [...g.value, cover] : g.value.filter((x) => x !== cover))}
+											className="h-4 w-4 text-primary rounded"
+										/>
+										إضافة هذه الصورة إلى معرض الصور؟
+									</label>
+								)
+							}}
+						/>
+					</div>
+
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">المرفقات</h3>
+						<Controller
+							control={control}
+							name="attachments"
+							render={({ field: f }) => (
+								<Controller
+									control={control}
+									name="gallery_ids"
+									render={({ field: g }) => (
+										<AttachmentsInput
+											value={f.value}
+											onChange={f.onChange}
+											galleryIds={g.value}
+											onGalleryChange={g.onChange}
+										/>
+									)}
+								/>
+							)}
+						/>
 					</div>
 
 					<div className="flex flex-col gap-2">
 						<button type="submit" disabled={isSaving} className="cursor-pointer w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white font-semibold rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 disabled:cursor-not-allowed transition-all active:translate-y-px">
 							{isSaving && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} />}
-							{post ? "تحديث المقالة" : "إنشاء مقالة"}
+							{post ? "تحديث الخبر" : "إنشاء خبر"}
 						</button>
 						<button type="button" onClick={() => router.push("/dashboard/posts")} disabled={isSaving} className="cursor-pointer w-full px-6 py-2.5 border border-[hsl(var(--border-strong))] font-medium rounded-md text-foreground bg-white hover:bg-surface-muted disabled:opacity-50 transition-colors">
 							إلغاء

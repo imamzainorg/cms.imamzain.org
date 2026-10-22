@@ -3,16 +3,18 @@
 import { useState, useCallback } from "react"
 import type { GalleryImage, GalleryCategory } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorStatus } from "@/lib/api"
 import { categoryName, pickTranslation } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
-import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag, Eye, EyeOff } from "lucide-react"
+import { Upload, Library, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag, Eye, EyeOff } from "lucide-react"
 import { safeFormat, toArabicDigits } from "@/lib/dates"
 import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import IconButton from "@/components/ui/IconButton"
 import FilterPills from "@/components/ui/FilterPills"
 import MediaInput from "@/components/ui/MediaInput"
+import MediaPicker from "@/components/ui/MediaPicker"
+import type { MediaRecord } from "@/types"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { CardGridSkeleton } from "@/components/ui/Skeleton"
@@ -41,6 +43,7 @@ export default function GalleryPage() {
 	// itself (list payloads are slim: translations drop `description`, so
 	// seeding the form from a list item would silently wipe descriptions on save).
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [pickerOpen, setPickerOpen] = useState(false)
 	const { confirm, dialog } = useConfirm()
 
 	// GalleryQueryDto has no is_published filter (forbidNonWhitelisted would
@@ -76,6 +79,27 @@ export default function GalleryPage() {
 			e.target.value = ""
 		}
 	}, [uploadMedia, createGallery])
+
+	// Adds files that already exist in the media library; a file already in the gallery (409) is skipped.
+	const handleAddFromLibrary = async (items: MediaRecord[]) => {
+		setPickerOpen(false)
+		let added = 0
+		let skipped = 0
+		for (const m of items) {
+			try {
+				await createGallery.mutateAsync({
+					media_id: m.id,
+					translations: [{ lang: "ar", title: (m.filename ?? "").replace(/\.[^.]+$/, "").slice(0, 500) || "صورة" }],
+				})
+				added++
+			} catch (err) {
+				if (getErrorStatus(err) === 409) skipped++
+				else toast.error(`${m.filename}: ${getErrorMessage(err, "تعذّرت الإضافة")}`)
+			}
+		}
+		if (added) toast.success(`تمت إضافة ${added} صورة إلى المعرض`)
+		if (skipped) toast.info(`${skipped} صورة موجودة في المعرض مسبقاً`)
+	}
 
 	const handleDelete = async (mediaId: string) => {
 		const ok = await confirm({
@@ -122,6 +146,9 @@ export default function GalleryPage() {
 						<a href="/dashboard/gallery/trash" className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
 							<Trash2 className="h-4 w-4" />سلة المهملات
 						</a>
+						<button type="button" disabled={uploading} onClick={() => setPickerOpen(true)} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/5 disabled:opacity-50">
+							<Library className="h-4 w-4" />من مكتبة الوسائط
+						</button>
 						<label className={`inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 cursor-pointer transition-colors ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
 							{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
 							{uploading ? "جارٍ الرفع..." : "رفع صور"}
@@ -218,6 +245,14 @@ export default function GalleryPage() {
 				/>
 			)}
 			{dialog}
+			<MediaPicker
+				open={pickerOpen}
+				multiple
+				title="اختر صوراً لإضافتها إلى المعرض"
+				onClose={() => setPickerOpen(false)}
+				onSelect={() => {}}
+				onSelectMany={handleAddFromLibrary}
+			/>
 		</div>
 	)
 }

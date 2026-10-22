@@ -13,6 +13,10 @@ type ListParams = {
 	page?: number
 	limit?: number
 	status?: Status
+	search?: string
+	country?: string
+	from?: string
+	to?: string
 }
 
 /**

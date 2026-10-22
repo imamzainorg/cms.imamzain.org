@@ -53,8 +53,8 @@ export function humanizeFileSize(bytes: number | null | undefined): string {
 }
 
 const RESOURCE_LABELS: Record<string, string> = {
-	post: "مقالة",
-	posts: "مقالة",
+	post: "خبر",
+	posts: "خبر",
 	book: "كتاب",
 	books: "كتاب",
 	"academic-paper": "بحث",
@@ -80,7 +80,7 @@ const RESOURCE_LABELS: Record<string, string> = {
 	contest: "مسابقة",
 	"contest-participant": "مشارك مسابقة",
 	"proxy-visit": "طلب زيارة",
-	"post-category": "تصنيف مقالة",
+	"post-category": "تصنيف خبر",
 	"book-category": "تصنيف كتاب",
 	"paper-category": "تصنيف بحث",
 	"academic-paper-category": "تصنيف بحث",
@@ -164,7 +164,7 @@ const ACTION_VERBS: Record<string, string> = {
 
 /**
  * Convert audit-log codes like "POST_CREATED" / "post.create" / "user-update"
- * into a localized phrase like { verb: "أنشأ", resource: "مقالة" }.
+ * into a localized phrase like { verb: "أنشأ", resource: "خبر" }.
  * Returns the original code as `raw` for fallback display.
  */
 export function humanizeAuditAction(code: string | null | undefined): {

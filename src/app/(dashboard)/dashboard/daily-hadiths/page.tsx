@@ -139,7 +139,7 @@ export default function DailyHadithsPage() {
 							<div key={h.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/30 hover:shadow-md transition-all">
 								<div className="flex items-start justify-between mb-3">
 									{day ? (
-										<span className="text-xs font-medium inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary-foreground">
+										<span className="text-xs font-medium inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary text-white">
 											<CalendarDays className="h-3.5 w-3.5" />{day}
 										</span>
 									) : (

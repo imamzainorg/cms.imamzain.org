@@ -22,9 +22,9 @@ const mockPost = {
 	created_at: "2024-01-15",
 	updated_at: "2024-01-15",
 	post_translations: [
-		{ lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", is_default: true },
+		{ lang: "ar", title: "خبر الاختبار", summary: null, body: "x", is_default: true },
 	],
-	translation: { lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", is_default: true },
+	translation: { lang: "ar", title: "خبر الاختبار", summary: null, body: "x", is_default: true },
 }
 
 const mockCategory = {
@@ -51,9 +51,9 @@ describe("PostsPage", () => {
 			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([mockCategory])))),
 		)
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 		// Header
-		expect(screen.getByText("المقالات")).toBeInTheDocument()
+		expect(screen.getByText("الأخبار")).toBeInTheDocument()
 		// Category appears in the filter dropdown
 		expect(screen.getByText("أخبار")).toBeInTheDocument()
 	})
@@ -64,17 +64,17 @@ describe("PostsPage", () => {
 			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
 		)
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText(/لا توجد مقالات بعد/)).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText(/لا توجد أخبار بعد/)).toBeInTheDocument())
 	})
 
-	it("routes to the create page when 'مقالة جديدة' is clicked", async () => {
+	it("routes to the create page when 'خبر جديد' is clicked", async () => {
 		server.use(
 			http.get(`${API}/posts/admin`, () => HttpResponse.json(wrap(paginated([mockPost])))),
 			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
 		)
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
-		const newButton = screen.getAllByText("مقالة جديدة")[0]
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
+		const newButton = screen.getAllByText("خبر جديد")[0]
 		await act(async () => { fireEvent.click(newButton) })
 		expect(mockPush).toHaveBeenCalledWith("/dashboard/posts/new")
 	})
@@ -85,7 +85,7 @@ describe("PostsPage", () => {
 			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
 		)
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 		// The three status tabs are present (some labels also appear as card status badges)
 		expect(screen.getByText("الكل")).toBeInTheDocument()
 		expect(screen.getAllByText("منشور").length).toBeGreaterThanOrEqual(1)
@@ -105,7 +105,7 @@ describe("PostsPage", () => {
 			http.get(`${API}/post-categories`, () => HttpResponse.json(wrap(paginated([])))),
 		)
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 
 		// Initial load defaults to status=all (the page sends every filter,
 		// including the default, so the server signature stays predictable).
@@ -135,7 +135,7 @@ describe("PostsPage", () => {
 		)
 		localStorage.clear()
 		const first = renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 
 		const gridToggle = screen.getByTitle("عرض البطاقات")
 		await act(async () => { fireEvent.click(gridToggle) })
@@ -145,7 +145,7 @@ describe("PostsPage", () => {
 
 		// Fresh mount: should pick up the stored "grid" preference.
 		renderWithQueryClient(<PostsPage />)
-		await waitFor(() => expect(screen.getByText("مقالة الاختبار")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 		const tableToggle = screen.getByTitle("عرض الجدول")
 		// aria-pressed reflects active toggle; "grid" should be pressed now.
 		expect(tableToggle.getAttribute("aria-pressed")).toBe("false")

@@ -12,8 +12,8 @@ import { safeFormat } from "@/lib/dates"
 // Localized labels for permission resource and verb segments.
 // Permissions in the API are slug-shaped like "posts:create" or "newsletter:read".
 const RESOURCE_LABELS: Record<string, string> = {
-	posts: "المقالات",
-	"post-categories": "تصنيفات المقالات",
+	posts: "الأخبار",
+	"post-categories": "تصنيفات الأخبار",
 	books: "الكتب",
 	"book-categories": "تصنيفات الكتب",
 	papers: "الأبحاث",

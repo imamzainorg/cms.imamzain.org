@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/auth"
 import { authService } from "@/services/auth.service"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { Loader2, Lock, Shield, Calendar, KeyRound, Check } from "lucide-react"
+import { Loader2, Lock, Shield, Calendar, KeyRound, Check, AlertTriangle } from "lucide-react"
 import { safeFormat } from "@/lib/dates"
 
 // Localized labels for permission resource and verb segments.
@@ -56,6 +56,10 @@ function localizePermission(p: string): { resourceLabel: string; verbLabel: stri
 	}
 }
 
+/** The API's floor for new passwords (login still accepts older, shorter ones). */
+const MIN_PASSWORD_LENGTH = 10
+const MAX_PASSWORD_LENGTH = 128
+
 export default function ProfilePage() {
 	const { user, logout } = useAuthStore()
 	const [pw, setPw] = useState({ current: "", next: "", confirm: "" })
@@ -82,7 +86,8 @@ export default function ProfilePage() {
 	const handleChangePassword = (e: React.FormEvent) => {
 		e.preventDefault()
 		if (pw.next !== pw.confirm) { toast.error("كلمتا المرور غير متطابقتين"); return }
-		if (pw.next.length < 6) { toast.error("كلمة المرور يجب ألا تقل عن ٦ أحرف"); return }
+		if (pw.next.length < MIN_PASSWORD_LENGTH) { toast.error(`كلمة المرور يجب ألا تقل عن ${MIN_PASSWORD_LENGTH} أحرف`); return }
+		if (pw.next === pw.current) { toast.error("كلمة المرور الجديدة يجب أن تختلف عن الحالية"); return }
 		changePassword.mutate(
 			{ current: pw.current, next: pw.next },
 			{
@@ -103,6 +108,18 @@ export default function ProfilePage() {
 	return (
 		<div className="max-w-5xl">
 			<h1 className="text-3xl font-bold text-gray-900 mb-6">حسابي</h1>
+
+			{user.must_change_password && (
+				<div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3" role="alert">
+					<AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+					<div>
+						<h2 className="text-sm font-semibold text-amber-900">يجب تغيير كلمة المرور</h2>
+						<p className="text-xs text-amber-800 mt-1 leading-relaxed">
+							أعاد مدير النظام تعيين كلمة مرورك. اختر كلمة مرور جديدة خاصة بك (تختلف عن التي سُلّمت إليك) قبل متابعة استخدام النظام.
+						</p>
+					</div>
+				</div>
+			)}
 
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<div className="lg:col-span-1 space-y-4">
@@ -139,17 +156,18 @@ export default function ProfilePage() {
 						<form onSubmit={handleChangePassword} className="p-5 space-y-3">
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">الحالية</label>
-								<input type="password" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })}
+								<input type="password" required autoComplete="current-password" maxLength={MAX_PASSWORD_LENGTH} value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })}
 									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 							</div>
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">الجديدة</label>
-								<input type="password" required minLength={6} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })}
+								<input type="password" required autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} maxLength={MAX_PASSWORD_LENGTH} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })}
 									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+								<p className="mt-1 text-[11px] text-gray-500">{MIN_PASSWORD_LENGTH} أحرف على الأقل.</p>
 							</div>
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">تأكيد الجديدة</label>
-								<input type="password" required value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+								<input type="password" required autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
 									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 							</div>
 							<button type="submit" disabled={saving}

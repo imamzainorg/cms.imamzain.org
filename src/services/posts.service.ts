@@ -6,7 +6,6 @@ type TranslationInput = {
 	title: string
 	summary?: string
 	body: string
-	slug: string
 	is_default: boolean
 	meta_title?: string
 	meta_description?: string
@@ -29,9 +28,11 @@ export const postsService = {
 	create: (body: {
 		category_id: string
 		cover_image_id?: string | null
+		slug: string
 		is_published?: boolean
 		is_featured?: boolean
-		published_at?: string
+		// ISO instant WITH an offset (Z or ±hh:mm) — an offset-less value is a 400.
+		published_at?: string | null
 		translations: TranslationInput[]
 		attachment_ids?: string[]
 	}) => api.post<Post>("/posts", body),
@@ -39,13 +40,18 @@ export const postsService = {
 	update: (id: string, body: Partial<{
 		category_id: string
 		cover_image_id: string | null
+		slug: string
 		is_published: boolean
 		is_featured: boolean
-		published_at: string
+		// null clears a schedule; undefined leaves it alone.
+		published_at: string | null
 		translations: TranslationInput[]
 		attachment_ids: string[]
 	}>) => api.patch<Post>(`/posts/${id}`, body),
 
+	// Idempotent: asking for the state the post is already in is a 200 no-op.
+	// Unpublishing clears `published_at`; to cancel a schedule on a draft use
+	// update({ published_at: null }) instead.
 	togglePublish: (id: string, is_published: boolean) =>
 		api.patch<Post>(`/posts/${id}/publish`, { is_published }),
 

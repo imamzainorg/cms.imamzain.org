@@ -15,15 +15,16 @@ const mockPost = {
 	id: "p1",
 	category_id: "c1",
 	cover_image_id: null,
+	slug: "test",
 	is_published: false,
 	published_at: null,
 	views: 5,
 	created_at: "2024-01-15",
 	updated_at: "2024-01-15",
 	post_translations: [
-		{ lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", slug: "test", is_default: true },
+		{ lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", is_default: true },
 	],
-	translation: { lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", slug: "test", is_default: true },
+	translation: { lang: "ar", title: "مقالة الاختبار", summary: null, body: "x", is_default: true },
 }
 
 const mockCategory = {

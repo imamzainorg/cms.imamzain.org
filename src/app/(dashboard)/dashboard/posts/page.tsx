@@ -1,5 +1,6 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import type { Post, PostStatus } from "@/types"
@@ -392,7 +393,7 @@ export default function PostsPage() {
 					selected={selected}
 					onToggleSelected={toggleSelected}
 					onToggleSelectAll={toggleSelectAll}
-					onEdit={(p) => router.push(`/dashboard/posts/${p.id}`)}
+					onEdit={(p) => router.push(editHref.post(p.id))}
 					onDelete={handleDelete}
 					onTogglePublish={handleTogglePublish}
 					titleOf={titleOf}
@@ -404,7 +405,7 @@ export default function PostsPage() {
 					posts={posts}
 					selected={selected}
 					onToggleSelected={toggleSelected}
-					onEdit={(p) => router.push(`/dashboard/posts/${p.id}`)}
+					onEdit={(p) => router.push(editHref.post(p.id))}
 					onDelete={handleDelete}
 					onTogglePublish={handleTogglePublish}
 					titleOf={titleOf}

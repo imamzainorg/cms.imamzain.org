@@ -1,0 +1,3 @@
+# Applied by Cloudflare Workers Static Assets before any file is served.
+# Format: source destination [status]
+/ /dashboard 302

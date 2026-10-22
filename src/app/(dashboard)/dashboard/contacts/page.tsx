@@ -4,11 +4,12 @@ import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
 import type { Contact } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorStatus } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
 import { buildWebmailComposeUrl } from "@/lib/webmail"
 import Badge from "@/components/ui/Badge"
 import RichTextEditor from "@/components/ui/RichTextEditor"
+import NotesEditor from "@/components/forms/NotesEditor"
 import PageHeader from "@/components/layout/PageHeader"
 import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -85,7 +86,15 @@ export default function ContactsPage() {
 			{ id, body: { status } },
 			{
 				onSuccess: () => toast.success("تم التحديث"),
-				onError: (e) => toast.error(getErrorMessage(e, "فشل التحديث")),
+				onError: (e) => {
+					// 409 = another admin changed this message first (stale write): reload.
+					if (getErrorStatus(e) === 409) {
+						toast.error("عدّل مشرف آخر هذه الرسالة قبلك — حُدّثت القائمة، راجع حالتها ثم أعد المحاولة.")
+						contactsQuery.refetch()
+						return
+					}
+					toast.error(getErrorMessage(e, "فشل التحديث"))
+				},
 			},
 		)
 	}
@@ -267,6 +276,14 @@ function ContactReadingPane({
 }) {
 	const [reply, setReply] = useState("")
 	const [showReply, setShowReply] = useState(false)
+	const notesMutation = useUpdateContact()
+
+	const saveNotes = (notes: string) => {
+		notesMutation.mutate(
+			{ id: contact.id, body: { notes } },
+			{ onError: (e) => toast.error(getErrorMessage(e, "فشل حفظ الملاحظة")) },
+		)
+	}
 
 	const sendReply = () => {
 		// API doesn't expose "send email" — open the editor's webmail (Hostinger
@@ -317,6 +334,14 @@ function ContactReadingPane({
 				<div className="max-w-3xl">
 					<div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap leading-7">
 						{contact.message}
+					</div>
+
+					<div className="mt-6 pt-4 border-t border-gray-100">
+						<NotesEditor
+							value={contact.notes}
+							onSave={saveNotes}
+							saving={notesMutation.isPending}
+						/>
 					</div>
 
 					{!showReply ? (

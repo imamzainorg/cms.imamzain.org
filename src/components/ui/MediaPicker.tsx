@@ -1,5 +1,6 @@
 "use client"
 
+import { SEARCH_MIN_LENGTH } from "@/lib/use-list-page"
 import { useEffect, useState, useCallback } from "react"
 import { mediaService } from "@/services/media.service"
 import type { MediaRecord } from "@/types"
@@ -70,7 +71,9 @@ export default function MediaPicker({
 	useEffect(() => {
 		if (!open) return
 		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
+			// The API rejects a search under 2 characters (400): treat it as no search.
+			const q = search.trim()
+			setDebouncedSearch(q.length >= SEARCH_MIN_LENGTH ? q : "")
 		}, 300)
 		return () => clearTimeout(t)
 	}, [search, open])

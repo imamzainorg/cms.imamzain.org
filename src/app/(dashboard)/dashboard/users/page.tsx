@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query"
 import type { UserSummary } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import Badge from "@/components/ui/Badge"
+import { getAccountAdminErrorMessage } from "@/lib/rbac-errors"
 import EmptyState from "@/components/ui/EmptyState"
 import Modal from "@/components/ui/Modal"
 import PageHeader from "@/components/layout/PageHeader"
@@ -14,7 +14,7 @@ import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { TableSkeleton } from "@/components/ui/Skeleton"
 import {
-	Plus, Trash2, Loader2, Users as UsersIcon, X, Shield, Pencil, Search, Power,
+	Plus, Trash2, Loader2, Users as UsersIcon, X, Shield, Pencil, Search,
 	Check, UserPlus, KeyRound,
 } from "lucide-react"
 import { safeFormat } from "@/lib/dates"
@@ -29,6 +29,9 @@ import {
 import { useRolesList } from "@/lib/queries/roles"
 import { authService } from "@/services/auth.service"
 
+/** The API's floor for new and reset passwords (login still accepts older, shorter ones). */
+const MIN_PASSWORD_LENGTH = 10
+
 export default function UsersPage() {
 	const [showCreate, setShowCreate] = useState(false)
 	const [editing, setEditing] = useState<UserSummary | null>(null)
@@ -39,7 +42,7 @@ export default function UsersPage() {
 	const { confirm, dialog } = useConfirm()
 
 	const [createForm, setCreateForm] = useState({ username: "", password: "" })
-	const [editForm, setEditForm] = useState({ username: "", is_active: true })
+	const [editForm, setEditForm] = useState({ username: "" })
 	const [pendingRoleId, setPendingRoleId] = useState<string | null>(null)
 	const [resettingUser, setResettingUser] = useState<UserSummary | null>(null)
 	const [newPassword, setNewPassword] = useState("")
@@ -52,19 +55,19 @@ export default function UsersPage() {
 	const handleResetPassword = (e: React.FormEvent) => {
 		e.preventDefault()
 		if (!resettingUser) return
-		if (newPassword.length < 6) {
-			toast.error("كلمة المرور يجب ألا تقل عن ٦ أحرف")
+		if (newPassword.length < MIN_PASSWORD_LENGTH) {
+			toast.error(`كلمة المرور يجب ألا تقل عن ${MIN_PASSWORD_LENGTH} أحرف`)
 			return
 		}
 		resetPasswordMutation.mutate(
 			{ userId: resettingUser.id, new_password: newPassword },
 			{
 				onSuccess: () => {
-					toast.success(`تم تعيين كلمة المرور الجديدة لـ ${resettingUser.username}. سيُسجَّل خروجه من كل الجلسات.`)
+					toast.success(`تم تعيين كلمة المرور الجديدة لـ ${resettingUser.username}. سيُسجَّل خروجه من كل الجلسات وسيُطلب منه اختيار كلمة مرور خاصة به عند دخوله.`)
 					setResettingUser(null)
 					setNewPassword("")
 				},
-				onError: (e) => toast.error(getErrorMessage(e, "فشل تعيين كلمة المرور")),
+				onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل تعيين كلمة المرور")),
 			},
 		)
 	}
@@ -90,7 +93,7 @@ export default function UsersPage() {
 
 	const handleCreate = (e: React.FormEvent) => {
 		e.preventDefault()
-		createUser.mutate(createForm, {
+		createUser.mutate({ username: createForm.username.trim(), password: createForm.password }, {
 			onSuccess: () => {
 				toast.success("تم إنشاء المستخدم")
 				setCreateForm({ username: "", password: "" })
@@ -104,17 +107,17 @@ export default function UsersPage() {
 		e.preventDefault()
 		if (!editing) return
 		updateUser.mutate(
-			{ id: editing.id, body: editForm },
+			{ id: editing.id, body: { username: editForm.username.trim() } },
 			{
 				onSuccess: () => { toast.success("تم التحديث"); setEditing(null) },
-				onError: (e) => toast.error(getErrorMessage(e, "فشل التحديث")),
+				onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل التحديث")),
 			},
 		)
 	}
 
 	const startEdit = (u: UserSummary) => {
 		setEditing(u)
-		setEditForm({ username: u.username, is_active: u.is_active })
+		setEditForm({ username: u.username })
 	}
 
 	const handleDelete = async (u: UserSummary) => {
@@ -127,27 +130,8 @@ export default function UsersPage() {
 		if (!ok) return
 		deleteUser.mutate(u.id, {
 			onSuccess: () => toast.success("تم الحذف"),
-			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
+			onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل الحذف")),
 		})
-	}
-
-	const toggleActive = async (u: UserSummary) => {
-		if (u.is_active) {
-			const ok = await confirm({
-				title: `تعطيل "${u.username}"؟`,
-				description: "لن يستطيع المستخدم تسجيل الدخول حتى تقوم بإعادة تفعيله.",
-				confirmText: "تعطيل",
-				tone: "warning",
-			})
-			if (!ok) return
-		}
-		updateUser.mutate(
-			{ id: u.id, body: { is_active: !u.is_active } },
-			{
-				onSuccess: () => toast.success(u.is_active ? "تم التعطيل" : "تم التفعيل"),
-				onError: (e) => toast.error(getErrorMessage(e, "فشل التحديث")),
-			},
-		)
 	}
 
 	const assignRole = (userId: string, roleId: string) => {
@@ -156,7 +140,7 @@ export default function UsersPage() {
 			{ userId, roleId },
 			{
 				onSuccess: () => toast.success("تم إضافة الدور"),
-				onError: (e) => toast.error(getErrorMessage(e, "فشل إضافة الدور")),
+				onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل إضافة الدور")),
 				onSettled: () => setPendingRoleId(null),
 			},
 		)
@@ -168,7 +152,7 @@ export default function UsersPage() {
 			{ userId, roleId },
 			{
 				onSuccess: () => toast.success("تمت إزالة الدور"),
-				onError: (e) => toast.error(getErrorMessage(e, "فشل إزالة الدور")),
+				onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل إزالة الدور")),
 				onSettled: () => setPendingRoleId(null),
 			},
 		)
@@ -211,14 +195,14 @@ export default function UsersPage() {
 				<form onSubmit={handleCreate} className="p-6 space-y-4">
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">اسم المستخدم</label>
-						<input required minLength={3} value={createForm.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+						<input required minLength={3} maxLength={50} value={createForm.username} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
 							className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-soft focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
 					</div>
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
-						<input type="password" required minLength={6} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+						<input type="password" required autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} maxLength={128} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
 							className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-soft focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
-						<p className="mt-1 text-xs text-gray-500">٦ أحرف على الأقل.</p>
+						<p className="mt-1 text-xs text-gray-500">{MIN_PASSWORD_LENGTH} أحرف على الأقل.</p>
 					</div>
 					<div className="flex justify-end gap-2 pt-2">
 						<button type="button" onClick={() => setShowCreate(false)} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">إلغاء</button>
@@ -237,12 +221,11 @@ export default function UsersPage() {
 								<tr>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">المستخدم</th>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">الأدوار</th>
-									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">الحالة</th>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">منذ</th>
 									<th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">إجراءات</th>
 								</tr>
 							</thead>
-							<tbody className="bg-white divide-y divide-gray-200"><TableSkeleton rows={5} cols={5} /></tbody>
+							<tbody className="bg-white divide-y divide-gray-200"><TableSkeleton rows={5} cols={4} /></tbody>
 						</table>
 					) : filtered.length === 0 ? (
 						<EmptyState
@@ -261,7 +244,6 @@ export default function UsersPage() {
 								<tr>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">المستخدم</th>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">الأدوار</th>
-									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">الحالة</th>
 									<th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">منذ</th>
 									<th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">إجراءات</th>
 								</tr>
@@ -286,15 +268,9 @@ export default function UsersPage() {
 												{!(u.user_roles ?? []).length && <span className="text-xs text-gray-400 italic">لا أدوار</span>}
 											</div>
 										</td>
-										<td className="px-6 py-3.5">
-											<Badge variant={u.is_active ? "success" : "error"} dot>
-												{u.is_active ? "نشط" : "معطّل"}
-											</Badge>
-										</td>
 										<td className="px-6 py-3.5 text-sm text-gray-500 tabular-nums">{safeFormat(u.created_at, "dd/MM/yyyy")}</td>
 										<td className="px-6 py-3.5 text-left">
 											<div className="flex items-center justify-end gap-1.5">
-												<button onClick={(e) => { e.stopPropagation(); toggleActive(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning-soft))]" title={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"} aria-label={u.is_active ? "تعطيل الحساب" : "تفعيل الحساب"}><Power className="h-4 w-4" strokeWidth={1.6} /></button>
 												<button onClick={(e) => { e.stopPropagation(); setResettingUser(u); setNewPassword("") }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-[hsl(var(--info-foreground))] hover:bg-[hsl(var(--info-soft))]" title="تعيين كلمة مرور جديدة" aria-label="تعيين كلمة مرور جديدة"><KeyRound className="h-4 w-4" strokeWidth={1.6} /></button>
 												<button onClick={(e) => { e.stopPropagation(); startEdit(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--foreground-muted))] hover:text-primary hover:bg-[hsl(var(--primary)/0.08)]" title="تعديل" aria-label="تعديل"><Pencil className="h-4 w-4" strokeWidth={1.6} /></button>
 												<button onClick={(e) => { e.stopPropagation(); handleDelete(u) }} className="cursor-pointer p-1.5 rounded-md transition-colors text-[hsl(var(--danger))] hover:bg-[hsl(var(--danger-soft))]" title="حذف" aria-label="حذف"><Trash2 className="h-4 w-4" strokeWidth={1.6} /></button>
@@ -393,13 +369,9 @@ export default function UsersPage() {
 					<div className="p-6 space-y-4">
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">اسم المستخدم</label>
-							<input required minLength={3} value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+							<input required minLength={3} maxLength={50} value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
 								className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-soft focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
 						</div>
-						<label className="flex items-center gap-2 cursor-pointer">
-							<input type="checkbox" checked={editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} className="h-4 w-4 text-primary rounded cursor-pointer" />
-							<span className="text-sm text-gray-900">حساب نشط (يستطيع تسجيل الدخول)</span>
-						</label>
 					</div>
 					<div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-200 bg-gray-50">
 						<button type="button" onClick={() => setEditing(null)} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">إلغاء</button>
@@ -423,12 +395,14 @@ export default function UsersPage() {
 						<input
 							type="password"
 							required
-							minLength={6}
+							autoComplete="new-password"
+							minLength={MIN_PASSWORD_LENGTH}
+							maxLength={128}
 							value={newPassword}
 							onChange={(e) => setNewPassword(e.target.value)}
 							className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-soft focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
 						/>
-						<p className="mt-1 text-xs text-gray-500">٦ أحرف على الأقل.</p>
+						<p className="mt-1 text-xs text-gray-500">{MIN_PASSWORD_LENGTH} أحرف على الأقل. سيُطلب من المستخدم تغييرها إلى كلمة مرور خاصة به عند أول دخول.</p>
 					</div>
 					<div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-200 bg-gray-50">
 						<button type="button" onClick={() => { setResettingUser(null); setNewPassword("") }} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-white">إلغاء</button>

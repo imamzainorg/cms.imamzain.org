@@ -3,6 +3,8 @@ type LoginUser = {
 	username: string
 	roles: string[]
 	permissions: string[]
+	/** True after an admin reset the password; cleared when the user changes it themselves. */
+	must_change_password: boolean
 }
 
 export type MeUser = {
@@ -11,6 +13,8 @@ export type MeUser = {
 	created_at: string
 	roles: string[]
 	permissions: string[]
+	/** True after an admin reset the password; cleared when the user changes it themselves. */
+	must_change_password: boolean
 }
 
 export type LoginResponse = {

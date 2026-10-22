@@ -6,9 +6,13 @@ import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { categoryName, pickTranslation } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
-import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag } from "lucide-react"
-import { safeFormat } from "@/lib/dates"
+import { Upload, Trash2, ImageIcon, Loader2, Search, X, Save, Plus, MapPin, Tag, Eye, EyeOff } from "lucide-react"
+import { safeFormat, toArabicDigits } from "@/lib/dates"
+import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
+import IconButton from "@/components/ui/IconButton"
+import FilterPills from "@/components/ui/FilterPills"
+import MediaInput from "@/components/ui/MediaInput"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { CardGridSkeleton } from "@/components/ui/Skeleton"
@@ -19,18 +23,28 @@ import {
 	useCreateGalleryItem,
 	useUpdateGalleryItem,
 	useDeleteGalleryItem,
+	useTogglePublishGallery,
 } from "@/lib/queries/gallery"
 import { useGalleryCategoriesList } from "@/lib/queries/gallery-categories"
 import { useTranslationsField } from "@/lib/use-translations-field"
 
+type StatusFilter = "all" | "published" | "draft"
+
+// Gallery limits (worker/src/features/gallery/schemas.ts).
+const GALLERY_LIST_MAX = 50
+const GALLERY_LABEL_MAX = 200
+
 export default function GalleryPage() {
 	const [search, setSearch] = useState("")
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
 	// media_id of the image being edited — the dialog fetches the FULL record
 	// itself (list payloads are slim: translations drop `description`, so
 	// seeding the form from a list item would silently wipe descriptions on save).
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const { confirm, dialog } = useConfirm()
 
+	// GalleryQueryDto has no is_published filter (forbidNonWhitelisted would
+	// 400 it) — filter by status client-side over the fetched batch instead.
 	const galleryQuery = useGalleryList({ limit: 100 })
 	const categoriesQuery = useGalleryCategoriesList({ limit: 100 })
 	const images = galleryQuery.data?.items ?? []
@@ -40,6 +54,7 @@ export default function GalleryPage() {
 	const uploadMedia = useUploadMedia()
 	const createGallery = useCreateGalleryItem()
 	const deleteGallery = useDeleteGalleryItem()
+	const togglePublish = useTogglePublishGallery()
 	const uploading = uploadMedia.isPending || createGallery.isPending
 
 	const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +65,8 @@ export default function GalleryPage() {
 				const media = await uploadMedia.mutateAsync(file)
 				await createGallery.mutateAsync({
 					media_id: media.id,
-					translations: [{ lang: "ar", title: file.name.replace(/\.[^.]+$/, "") }],
+					// title is required (1–500 chars): the file name, or a placeholder for ".jpg".
+					translations: [{ lang: "ar", title: file.name.replace(/\.[^.]+$/, "").slice(0, 500) || "صورة" }],
 				})
 			}
 			toast.success(`تم رفع ${files.length} صورة`)
@@ -75,10 +91,21 @@ export default function GalleryPage() {
 		})
 	}
 
+	const handleTogglePublish = (img: GalleryImage) => {
+		togglePublish.mutate(
+			{ id: img.media_id, is_published: !img.is_published },
+			{
+				onSuccess: () => toast.success(img.is_published ? "تم سحب النشر" : "تم النشر"),
+				onError: (e) => toast.error(getErrorMessage(e, "تعذّر التحديث")),
+			},
+		)
+	}
+
 	const getTitle = (img: GalleryImage) =>
 		pickTranslation(img.gallery_image_translations, img.translation)?.title || ""
 
 	const filtered = images.filter((img) => {
+		if (statusFilter !== "all" && img.is_published !== (statusFilter === "published")) return false
 		const title = getTitle(img).toLowerCase()
 		const q = search.toLowerCase()
 		return !q || title.includes(q) || img.tags.some((t) => t.toLowerCase().includes(q))
@@ -104,12 +131,24 @@ export default function GalleryPage() {
 				}
 			/>
 
-			<div className="relative">
-				<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-				<input
-					type="text" placeholder="ابحث بالعنوان أو الوسم..."
-					value={search} onChange={(e) => setSearch(e.target.value)}
-					className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary bg-white"
+			<div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-3 items-center">
+				<div className="relative flex-1 min-w-50">
+					<Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+					<input
+						type="text" placeholder="ابحث بالعنوان أو الوسم..."
+						value={search} onChange={(e) => setSearch(e.target.value)}
+						className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary bg-white"
+					/>
+				</div>
+				<FilterPills<StatusFilter>
+					variant="segmented"
+					value={statusFilter}
+					onChange={setStatusFilter}
+					options={[
+						{ value: "all", label: "الكل" },
+						{ value: "published", label: "منشور" },
+						{ value: "draft", label: "مسودة" },
+					]}
 				/>
 			</div>
 
@@ -132,18 +171,39 @@ export default function GalleryPage() {
 			) : (
 				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
 					{filtered.map((image) => (
-						<button key={image.media_id}
-							onClick={() => setSelectedId(image.media_id)}
-							className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden text-right hover:ring-2 hover:ring-primary cursor-pointer">
-							{image.media?.url ? (
-								<img src={image.media.url} alt={getTitle(image)} className="w-full h-full object-cover" />
-							) : (
-								<div className="w-full h-full flex items-center justify-center"><ImageIcon className="h-10 w-10 text-gray-300" /></div>
-							)}
-							<div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-								<p className="text-white text-xs truncate font-medium">{getTitle(image) || "بدون عنوان"}</p>
+						<div key={image.media_id} className="group relative aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-primary">
+							<button
+								onClick={() => setSelectedId(image.media_id)}
+								className="absolute inset-0 w-full h-full bg-gray-100 text-right cursor-pointer">
+								{image.media?.url ? (
+									<img src={image.media.url} alt={getTitle(image)} className="w-full h-full object-cover" />
+								) : (
+									<div className="w-full h-full flex items-center justify-center"><ImageIcon className="h-10 w-10 text-gray-300" /></div>
+								)}
+								<div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+									<p className="text-white text-xs truncate font-medium">{getTitle(image) || "بدون عنوان"}</p>
+									<p className="text-white/70 text-[10px] flex items-center gap-1 mt-0.5">
+										<Eye className="h-3 w-3" strokeWidth={1.6} />{toArabicDigits(String(image.views ?? 0))}
+									</p>
+								</div>
+							</button>
+							<div className="absolute top-2 right-2 z-10 pointer-events-none">
+								<Badge variant={image.is_published ? "success" : "default"} dot>
+									{image.is_published ? "منشور" : "مسودة"}
+								</Badge>
 							</div>
-						</button>
+							<div className="absolute top-2 left-2 z-10">
+								<IconButton
+									onClick={() => handleTogglePublish(image)}
+									disabled={togglePublish.isPending}
+									label={image.is_published ? "سحب النشر" : "نشر"}
+									icon={image.is_published
+										? <EyeOff className="h-3.5 w-3.5" strokeWidth={1.6} />
+										: <Eye className="h-3.5 w-3.5" strokeWidth={1.6} />}
+									className="bg-white/90 hover:bg-white shadow-sm"
+								/>
+							</div>
+						</div>
 					))}
 				</div>
 			)}
@@ -231,6 +291,15 @@ function GalleryImageDialogContent({
 	const [locations, setLocations] = useState<string[]>(image.locations ?? [])
 	const [tagInput, setTagInput] = useState("")
 	const [locInput, setLocInput] = useState("")
+	const [isPublished, setIsPublished] = useState(image.is_published)
+	type GalleryTranslationDraft = {
+		lang: string
+		title: string
+		description: string
+		meta_title: string
+		meta_description: string
+		og_image_id: string | null
+	}
 	const {
 		translations,
 		activeLang,
@@ -238,23 +307,31 @@ function GalleryImageDialogContent({
 		updateAt: updateT,
 		addLang: addTranslation,
 		removeAt: removeTranslation,
-	} = useTranslationsField<{ lang: string; title: string; description: string }>({
+	} = useTranslationsField<GalleryTranslationDraft>({
 		initial: image.gallery_image_translations.length
 			? image.gallery_image_translations.map((t) => ({
-				lang: t.lang, title: t.title ?? "", description: t.description ?? "",
+				lang: t.lang,
+				title: t.title ?? "",
+				description: t.description ?? "",
+				meta_title: t.meta_title ?? "",
+				meta_description: t.meta_description ?? "",
+				og_image_id: t.og_image_id ?? null,
 			}))
-			: [{ lang: "ar", title: "", description: "" }],
+			: [{ lang: "ar", title: "", description: "", meta_title: "", meta_description: "", og_image_id: null }],
 		languages,
-		makeBlank: (lang) => ({ lang, title: "", description: "" }),
+		makeBlank: (lang) => ({ lang, title: "", description: "", meta_title: "", meta_description: "", og_image_id: null }),
 		requireDefault: false,
 	})
 
+	// Server limits (worker/src/features/gallery/schemas.ts): ≤ 50 entries of ≤ 200 chars each.
 	const addTag = () => {
 		if (!tagInput.trim() || tags.includes(tagInput.trim())) return
+		if (tags.length >= GALLERY_LIST_MAX) { toast.error(`الحد الأقصى ${GALLERY_LIST_MAX} وسماً`); return }
 		setTags([...tags, tagInput.trim()]); setTagInput("")
 	}
 	const addLoc = () => {
 		if (!locInput.trim() || locations.includes(locInput.trim())) return
+		if (locations.length >= GALLERY_LIST_MAX) { toast.error(`الحد الأقصى ${GALLERY_LIST_MAX} موقعاً`); return }
 		setLocations([...locations, locInput.trim()]); setLocInput("")
 	}
 
@@ -265,11 +342,22 @@ function GalleryImageDialogContent({
 				body: {
 					// null disconnects the category ("— بدون —"); undefined would keep it.
 				category_id: categoryId || null,
-					author: author || undefined,
-					taken_at: takenAt ? new Date(takenAt).toISOString() : undefined,
+					// null clears; undefined would leave the stored value in place.
+					author: author.trim() || null,
+					taken_at: takenAt ? new Date(takenAt).toISOString() : null,
 					tags,
 					locations,
-					translations: translations.filter((t) => t.title.trim()),
+					is_published: isPublished,
+					translations: translations
+						.filter((t) => t.title.trim())
+						.map((t) => ({
+							lang: t.lang,
+							title: t.title,
+							description: t.description || undefined,
+							meta_title: t.meta_title || undefined,
+							meta_description: t.meta_description || undefined,
+							og_image_id: t.og_image_id,
+						})),
 				},
 			},
 			{
@@ -306,6 +394,14 @@ function GalleryImageDialogContent({
 						</div>
 
 						<div className="md:col-span-3 p-6 space-y-4">
+							<label className="flex items-center justify-between p-3 border border-gray-200 rounded-md cursor-pointer bg-gray-50">
+								<span className="flex items-center gap-2 text-sm text-gray-900">
+									{isPublished ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
+									{isPublished ? "منشورة" : "مسودة"}
+								</span>
+								<input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="h-4 w-4 text-primary rounded" />
+							</label>
+
 							<div className="grid grid-cols-2 gap-3">
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">التصنيف</label>
@@ -317,7 +413,7 @@ function GalleryImageDialogContent({
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">المصوِّر</label>
-									<input value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<input value={author} maxLength={300} onChange={(e) => setAuthor(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">تاريخ الالتقاط</label>
@@ -327,12 +423,16 @@ function GalleryImageDialogContent({
 									<label className="block text-xs font-medium text-gray-500 mb-1">رُفعت في</label>
 									<p className="px-3 py-2 text-sm text-gray-600">{safeFormat(image.created_at, "dd/MM/yyyy")}</p>
 								</div>
+								<div>
+									<label className="block text-xs font-medium text-gray-500 mb-1">المشاهدات</label>
+									<p className="px-3 py-2 text-sm text-gray-600 flex items-center gap-1"><Eye className="h-3.5 w-3.5" strokeWidth={1.6} />{toArabicDigits(String(image.views ?? 0))}</p>
+								</div>
 							</div>
 
 							<div>
 								<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Tag className="h-3 w-3" />الوسوم</label>
 								<div className="flex gap-2">
-									<input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag() } }} placeholder="أضف وسماً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<input value={tagInput} maxLength={GALLERY_LABEL_MAX} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag() } }} placeholder="أضف وسماً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 									<button type="button" onClick={addTag} className="px-2.5 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 								</div>
 								<div className="flex flex-wrap gap-1 mt-2">
@@ -348,7 +448,7 @@ function GalleryImageDialogContent({
 							<div>
 								<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" />المواقع</label>
 								<div className="flex gap-2">
-									<input value={locInput} onChange={(e) => setLocInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLoc() } }} placeholder="أضف موقعاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<input value={locInput} maxLength={GALLERY_LABEL_MAX} onChange={(e) => setLocInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLoc() } }} placeholder="أضف موقعاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 									<button type="button" onClick={addLoc} className="px-2.5 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 								</div>
 								<div className="flex flex-wrap gap-1 mt-2">
@@ -380,14 +480,46 @@ function GalleryImageDialogContent({
 								{translations.map((t, i) => (
 									<div key={i} className={activeLang === t.lang ? "block space-y-2" : "hidden"}>
 										<input value={t.title} onChange={(e) => updateT(i, { title: e.target.value })}
+											maxLength={500}
 											placeholder="العنوان"
 											dir={t.lang === "ar" ? "rtl" : "ltr"}
 											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 										<textarea value={t.description} onChange={(e) => updateT(i, { description: e.target.value })}
+											maxLength={5000}
 											placeholder="وصف الصورة..."
 											dir={t.lang === "ar" ? "rtl" : "ltr"}
 											rows={3}
 											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+
+										<details className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+											<summary className="cursor-pointer text-xs font-semibold text-gray-900 select-none px-3 py-2 bg-linear-to-l from-primary/5 to-transparent border-b border-gray-100 flex items-center gap-2">
+												<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[10px] font-medium">SEO</span>
+												تحسين محركات البحث
+											</summary>
+											<div className="p-3 space-y-3 bg-white">
+												<div>
+													<label className="block text-xs font-medium text-gray-500 mb-1">عنوان SEO (meta title)</label>
+													<input value={t.meta_title} onChange={(e) => updateT(i, { meta_title: e.target.value })}
+														dir={t.lang === "ar" ? "rtl" : "ltr"}
+														maxLength={300}
+														placeholder="إن تُرك فارغاً، يُستخدم عنوان الصورة"
+														className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+												</div>
+												<div>
+													<label className="block text-xs font-medium text-gray-500 mb-1">وصف SEO (meta description)</label>
+													<textarea value={t.meta_description} onChange={(e) => updateT(i, { meta_description: e.target.value })}
+														rows={2}
+														dir={t.lang === "ar" ? "rtl" : "ltr"}
+														maxLength={500}
+														placeholder="إن تُرك فارغاً، يُستخدم وصف الصورة"
+														className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+												</div>
+												<div>
+													<label className="block text-xs font-medium text-gray-500 mb-1">صورة المشاركة (og:image)</label>
+													<MediaInput value={t.og_image_id ?? undefined} onChange={(id) => updateT(i, { og_image_id: id })} />
+												</div>
+											</div>
+										</details>
 									</div>
 								))}
 							</div>

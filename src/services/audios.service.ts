@@ -1,5 +1,11 @@
 import { api } from "@/lib/api"
 import type { Audio, PaginatedResponse } from "@/types"
+import {
+	requestAndUploadPdf,
+	AudioSizeExceededError,
+	AudioMimeNotAllowedError,
+	AudioUploadFailedError,
+} from "./pdf-upload"
 
 type AudioTranslationInput = {
 	lang: string
@@ -27,62 +33,23 @@ export const ALLOWED_AUDIO_MIME_TYPES = [
 	"audio/x-m4a",
 ] as const
 
-/** Thrown before the PUT when the file exceeds the server's advisory cap. */
-export class AudioSizeExceededError extends Error {
-	readonly maxBytes: number
-	constructor(maxBytes: number, kind: AudioUploadKind) {
-		const mb = Math.round(maxBytes / (1024 * 1024))
-		super(
-			kind === "pdf"
-				? `ملف PDF يتجاوز الحد المسموح (${mb} ميغابايت).`
-				: `الملف الصوتي يتجاوز الحد المسموح (${mb} ميغابايت).`,
-		)
-		this.name = "AudioSizeExceededError"
-		this.maxBytes = maxBytes
-	}
-}
-
-export class AudioMimeNotAllowedError extends Error {
-	readonly mimeType: string
-	constructor(mimeType: string, kind: AudioUploadKind) {
-		super(
-			kind === "pdf"
-				? `نوع الملف غير مدعوم (${mimeType || "غير معروف"}). المسموح: PDF فقط.`
-				: `نوع الملف غير مدعوم (${mimeType || "غير معروف"}). المسموح: MP3 أو M4A.`,
-		)
-		this.name = "AudioMimeNotAllowedError"
-		this.mimeType = mimeType
-	}
-}
+// Size/MIME/upload-failure error classes now live in pdf-upload.ts (shared
+// with books' and academic papers' PDF uploads) — re-exported here so
+// existing imports from this module keep working.
+export { AudioSizeExceededError, AudioMimeNotAllowedError, AudioUploadFailedError }
 
 /**
- * Thrown when the R2 PUT itself fails. A dedicated subclass (not a bare
- * Error) so getErrorMessage surfaces the Arabic message instead of the
- * caller's generic fallback.
+ * Resolve the content_type to declare to the API for the AUDIO kind (mp3/m4a).
+ * Some browsers report .mp3 as audio/mpeg, others leave file.type empty —
+ * fall back to the extension. Returns null when the file is not an accepted
+ * audio type. The PDF kind is handled by the shared pdf-upload helper.
  */
-export class AudioUploadFailedError extends Error {
-	constructor() {
-		super("فشل رفع الملف إلى مخزن الملفات. حاول مجدداً.")
-		this.name = "AudioUploadFailedError"
-	}
-}
-
-/**
- * Resolve the content_type to declare to the API. Some browsers report .mp3
- * as audio/mpeg, others leave file.type empty — fall back to the extension.
- * Returns null when the file is not acceptable for the given kind.
- */
-function resolveContentType(file: File, kind: AudioUploadKind): string | null {
-	const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
-	if (kind === "pdf") {
-		if (file.type === "application/pdf") return "application/pdf"
-		if (!file.type && ext === "pdf") return "application/pdf"
-		return null
-	}
+function resolveAudioContentType(file: File): string | null {
 	if ((ALLOWED_AUDIO_MIME_TYPES as readonly string[]).includes(file.type)) {
 		return file.type
 	}
 	// Extension fallback (empty or nonstandard file.type, e.g. audio/mp3).
+	const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
 	if (ext === "mp3") return "audio/mpeg"
 	if (ext === "m4a") return "audio/x-m4a"
 	return null
@@ -142,13 +109,21 @@ export const audiosService = {
 	 * Full upload flow: validate MIME → request pre-signed URL → validate size
 	 * against `maxBytes` → PUT straight to R2 with the SAME Content-Type header
 	 * (R2 403s on mismatch). No confirm step — the caller saves `publicUrl`
-	 * into audio_url / pdf_url.
+	 * into audio_url / pdf_url. The "pdf" kind delegates to the shared
+	 * pdf-upload helper (also used by books/papers); "audio" (mp3/m4a) keeps
+	 * its own logic here since the shared helper is PDF-only.
 	 */
 	uploadAudioFile: async (
 		file: File,
 		kind: AudioUploadKind,
 	): Promise<{ publicUrl: string }> => {
-		const contentType = resolveContentType(file, kind)
+		if (kind === "pdf") {
+			return requestAndUploadPdf(file, (filename) =>
+				audiosService.requestUploadUrl(filename, "application/pdf"),
+			)
+		}
+
+		const contentType = resolveAudioContentType(file)
 		if (!contentType) {
 			throw new AudioMimeNotAllowedError(file.type, kind)
 		}

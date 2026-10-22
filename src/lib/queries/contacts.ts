@@ -46,7 +46,7 @@ export function useContactCount(filter: { status?: Status } = {}) {
 export function useUpdateContact() {
 	const qc = useQueryClient()
 	return useMutation({
-		mutationFn: ({ id, body }: { id: string; body: { status: Status; responded_at?: string } }) =>
+		mutationFn: ({ id, body }: { id: string; body: Partial<{ status: Status; responded_at: string; notes: string }> }) =>
 			contactsService.update(id, body),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.contacts.all })

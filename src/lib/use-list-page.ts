@@ -4,6 +4,15 @@ import { useCallback, useEffect, useState } from "react"
 
 export type ViewMode = "table" | "grid"
 
+/**
+ * The API rejects a `?search=` shorter than 2 characters (after trimming) with
+ * a 400 — a one-character `contains` can't use the trigram indexes. A blank
+ * value means "no search". Everything typed below the floor is therefore
+ * treated as no search at all instead of being sent.
+ */
+export const SEARCH_MIN_LENGTH = 2
+export const SEARCH_MAX_LENGTH = 200
+
 type Options = {
 	/** Default `limit` for the first render. */
 	initialLimit?: number
@@ -61,7 +70,8 @@ export function useListPage(opts: Options = {}) {
 	// Debounce search → debouncedSearch and reset page when the user types.
 	useEffect(() => {
 		const t = setTimeout(() => {
-			setDebouncedSearch(search.trim())
+			const trimmed = search.trim()
+			setDebouncedSearch(trimmed.length >= SEARCH_MIN_LENGTH ? trimmed.slice(0, SEARCH_MAX_LENGTH) : "")
 			setPage(1)
 		}, debounceMs)
 		return () => clearTimeout(t)

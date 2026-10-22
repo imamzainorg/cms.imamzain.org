@@ -12,6 +12,7 @@ export type Contact = {
 	status: "NEW" | "RESPONDED" | "SPAM"
 	responded_at?: string | null
 	response?: string | null
+	notes?: string | null
 	submitted_at?: string
 	created_at?: string
 }

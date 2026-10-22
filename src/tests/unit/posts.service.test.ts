@@ -14,6 +14,7 @@ const mockPostListItem = {
 	id: "p1",
 	category_id: "cat1",
 	cover_image_id: null,
+	slug: "test-post",
 	is_published: false,
 	is_featured: false,
 	published_at: null,
@@ -21,18 +22,18 @@ const mockPostListItem = {
 	created_at: "2024-01-01T00:00:00Z",
 	updated_at: "2024-01-01T00:00:00Z",
 	post_translations: [
-		{ lang: "en", title: "Test Post", summary: null, slug: "test-post", is_default: true, reading_time_minutes: 0 },
+		{ lang: "en", title: "Test Post", summary: null, is_default: true, reading_time_minutes: 0 },
 	],
-	translation: { lang: "en", title: "Test Post", summary: null, slug: "test-post", is_default: true, reading_time_minutes: 0 },
+	translation: { lang: "en", title: "Test Post", summary: null, is_default: true, reading_time_minutes: 0 },
 }
 
 // DETAIL payloads carry the full translation incl. `body` + derived read time.
 const mockPostDetail = {
 	...mockPostListItem,
 	post_translations: [
-		{ lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true, reading_time_minutes: 1 },
+		{ lang: "en", title: "Test Post", summary: null, body: "Content", is_default: true, reading_time_minutes: 1 },
 	],
-	translation: { lang: "en", title: "Test Post", summary: null, body: "Content", slug: "test-post", is_default: true, reading_time_minutes: 1 },
+	translation: { lang: "en", title: "Test Post", summary: null, body: "Content", is_default: true, reading_time_minutes: 1 },
 }
 
 const server = setupServer(
@@ -60,16 +61,37 @@ describe("postsService", () => {
 		expect(data.id).toBe("p1")
 		expect(data.post_translations[0].title).toBe("Test Post")
 	})
-	it("creates a post", async () => {
+	it("creates a post with a top-level slug and no per-translation slug", async () => {
+		let captured: unknown = null
+		server.use(
+			http.post(`${API}/posts`, async ({ request }) => {
+				captured = await request.json()
+				return HttpResponse.json(wrap(mockPostDetail), { status: 201 })
+			}),
+		)
 		const { data } = await postsService.create({
 			category_id: "cat1",
-			translations: [{ lang: "en", title: "Test Post", body: "Content", slug: "test-post", is_default: true }],
+			slug: "test-post",
+			translations: [{ lang: "en", title: "Test Post", body: "Content", is_default: true }],
 		})
 		expect(data.id).toBe("p1")
+		expect(captured).toEqual({
+			category_id: "cat1",
+			slug: "test-post",
+			translations: [{ lang: "en", title: "Test Post", body: "Content", is_default: true }],
+		})
 	})
-	it("updates a post with PATCH", async () => {
-		const { data } = await postsService.update("p1", { is_published: true })
+	it("updates a post with PATCH, sending slug as a top-level key", async () => {
+		let captured: unknown = null
+		server.use(
+			http.patch(`${API}/posts/p1`, async ({ request }) => {
+				captured = await request.json()
+				return HttpResponse.json(wrap({ ...mockPostDetail, is_published: true }))
+			}),
+		)
+		const { data } = await postsService.update("p1", { is_published: true, slug: "renamed-post" })
 		expect(data.is_published).toBe(true)
+		expect(captured).toEqual({ is_published: true, slug: "renamed-post" })
 	})
 	it("toggles publish status", async () => {
 		const { data } = await postsService.togglePublish("p1", true)

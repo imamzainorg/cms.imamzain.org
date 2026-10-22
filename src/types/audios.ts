@@ -30,6 +30,7 @@ export type Audio = {
 	slug: string | null
 	duration_seconds: number | null
 	size_mb: number | null
+	views: number
 	is_published: boolean
 	created_at: string
 	updated_at: string

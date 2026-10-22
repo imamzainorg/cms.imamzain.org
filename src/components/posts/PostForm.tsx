@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import axios from "axios"
 import type { Post } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorCode } from "@/lib/api"
 import { categoryName, slugify } from "@/lib/i18n"
+import { isoToLocalInput, localInputToIso } from "@/lib/datetime"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
 import { useCreatePost, useUpdatePost } from "@/lib/queries/posts"
@@ -19,16 +21,22 @@ import MediaPicker from "@/components/ui/MediaPicker"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import { Loader2, Eye, EyeOff, Calendar, Star, Sparkles } from "lucide-react"
 
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+// Server limits (worker/src/features/posts/schemas.ts) — inputs mirror them.
+const TITLE_MAX = 500
+const SUMMARY_MAX = 5000
+const SLUG_MAX = 200
+
 const translationSchema = z.object({
 	lang: z.string().min(2),
-	title: z.string().min(1, "العنوان مطلوب"),
-	summary: z.string().optional(),
+	title: z.string().min(1, "العنوان مطلوب").max(TITLE_MAX, `العنوان أطول من ${TITLE_MAX} حرفاً`),
+	summary: z.string().max(SUMMARY_MAX, `الملخص أطول من ${SUMMARY_MAX} حرفاً`).optional(),
 	body: z.string()
 		.min(1, "المحتوى مطلوب")
 		.refine((s) => byteLength(s) <= MAX_BODY_BYTES, {
 			message: `المحتوى كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب). اختصره أو اقسمه إلى مقالات.`,
 		}),
-	slug: z.string().min(1, "الرابط المختصر مطلوب"),
 	is_default: z.boolean(),
 	meta_title: z.string().max(80).optional(),
 	meta_description: z.string().max(180).optional(),
@@ -38,6 +46,10 @@ const translationSchema = z.object({
 const postFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
 	cover_image_id: z.string().nullable().optional(),
+	slug: z.string()
+		.min(1, "الرابط المختصر مطلوب")
+		.max(SLUG_MAX, `الرابط أطول من ${SLUG_MAX} حرفاً`)
+		.regex(SLUG_RE, "أحرف لاتينية صغيرة وأرقام وشرطات فقط (مثال: hayat-al-imam-zain)"),
 	is_published: z.boolean(),
 	is_featured: z.boolean(),
 	published_at: z.string().optional(),
@@ -63,7 +75,6 @@ export default function PostForm({ post }: { post?: Post }) {
 		title: "",
 		summary: "",
 		body: "",
-		slug: "",
 		is_default,
 		meta_title: "",
 		meta_description: "",
@@ -75,6 +86,7 @@ export default function PostForm({ post }: { post?: Post }) {
 			return {
 				category_id: "",
 				cover_image_id: null,
+				slug: "",
 				is_published: false,
 				is_featured: false,
 				translations: [blankTranslation()],
@@ -87,7 +99,6 @@ export default function PostForm({ post }: { post?: Post }) {
 				title: t.title ?? "",
 				summary: t.summary ?? "",
 				body: t.body ?? "",
-				slug: t.slug ?? "",
 				is_default: t.is_default ?? false,
 				meta_title: t.meta_title ?? "",
 				meta_description: t.meta_description ?? "",
@@ -97,14 +108,17 @@ export default function PostForm({ post }: { post?: Post }) {
 		return {
 			category_id: post.category_id ?? "",
 			cover_image_id: post.cover_image_id ?? null,
+			slug: post.slug ?? "",
 			is_published: post.is_published,
 			is_featured: post.is_featured ?? false,
-			published_at: post.published_at ? new Date(post.published_at).toISOString().slice(0, 16) : undefined,
+			// A datetime-local input shows WALL-CLOCK time: convert the stored instant
+			// through the browser's zone (slicing the UTC ISO string shifted it).
+			published_at: isoToLocalInput(post.published_at),
 			translations,
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, setValue, setError, reset, formState: { errors } } =
 		useForm<PostFormData>({
 			resolver: zodResolver(postFormSchema),
 			defaultValues: buildDefaults(),
@@ -125,11 +139,15 @@ export default function PostForm({ post }: { post?: Post }) {
 	const translations = watch("translations")
 	const isPublished = watch("is_published")
 	const isFeatured = watch("is_featured")
+	const slugValue = watch("slug")
+	// A live post's slug is its public URL: the API refuses to rename it while it
+	// is (and stays) published. Unticking "published" in the same save unlocks it.
+	const slugLocked = !!post?.is_published && isPublished
 
 	const handleTitleChange = (index: number, value: string) => {
-		const current = translations[index]?.slug
-		if (!current) {
-			setValue(`translations.${index}.slug`, slugify(value))
+		if (!translations[index]?.is_default) return
+		if (!slugValue) {
+			setValue("slug", slugify(value))
 		}
 	}
 
@@ -162,19 +180,30 @@ export default function PostForm({ post }: { post?: Post }) {
 			toast.error("يجب اختيار لغة افتراضية واحدة بالضبط")
 			return
 		}
+		// Schedule rules (API): a post that is published NOW is stamped with the
+		// current time, whatever date was sent, so the field only matters while
+		// the post stays a draft — a FUTURE date schedules it (the minute cron
+		// flips it live), a past date is dropped. PATCH: undefined leaves it
+		// alone, null clears it, so an emptied field must send null.
+		const scheduledAt = localInputToIso(data.published_at)
+		const initialSchedule = isoToLocalInput(post?.published_at)
+		if (!data.is_published && scheduledAt && new Date(scheduledAt).getTime() <= Date.now() && data.published_at !== initialSchedule) {
+			setError("published_at", { type: "validate", message: "الموعد في الماضي — اختر موعداً مستقبلياً أو اتركه فارغاً لحفظها مسودة." })
+			return
+		}
+		const publishedAt = data.is_published ? undefined : scheduledAt ?? (post ? null : undefined)
 		const body = {
 			category_id: data.category_id,
-			cover_image_id: data.cover_image_id ?? undefined,
+			// null removes the cover on PATCH; undefined would silently keep it.
+			cover_image_id: data.cover_image_id ?? (post ? null : undefined),
+			slug: data.slug,
 			is_published: data.is_published,
 			is_featured: data.is_featured,
-			// datetime-local lacks a timezone — convert through the browser's
-			// local zone to a real ISO timestamp the API expects.
-			published_at: data.published_at ? new Date(data.published_at).toISOString() : undefined,
+			published_at: publishedAt,
 			translations: data.translations.map((t) => ({
 				...t,
 				summary: t.summary || undefined,
 				body: sanitizeEditorHtml(t.body),
-				slug: t.slug || slugify(t.title),
 				meta_title: t.meta_title || undefined,
 				meta_description: t.meta_description || undefined,
 				og_image_id: t.og_image_id ?? null,
@@ -186,7 +215,18 @@ export default function PostForm({ post }: { post?: Post }) {
 				router.push("/dashboard/posts")
 				router.refresh()
 			},
-			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل حفظ المقالة")),
+			onError: (e: unknown) => {
+				if (axios.isAxiosError(e) && e.response?.status === 409) {
+					// 409 covers more than the slug (a language or attachment listed
+					// twice, …): only blame the slug field when it really is the slug.
+					const text = String((e.response.data as { error?: unknown } | undefined)?.error ?? "")
+					if (getErrorCode(e) === "SLUG_LOCKED_WHILE_PUBLISHED" || /\bslug\b/i.test(text)) {
+						setError("slug", { type: "server", message: getErrorMessage(e, "الرابط المختصر مستخدم بالفعل") })
+						return
+					}
+				}
+				toast.error(getErrorMessage(e, "فشل حفظ المقالة"))
+			},
 		}
 		if (post) {
 			updatePost.mutate({ id: post.id, body }, handlers)
@@ -235,20 +275,16 @@ export default function PostForm({ post }: { post?: Post }) {
 									<input
 										{...register(`translations.${index}.title`, { onChange: (e) => handleTitleChange(index, e.target.value) })}
 										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
+										maxLength={TITLE_MAX}
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-lg"
 									/>
 									{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
 								</div>
 
-								<details className="text-sm">
-									<summary className="text-gray-500 cursor-pointer hover:text-gray-700 select-none">الرابط المختصر (slug)</summary>
-									<input {...register(`translations.${index}.slug`)} dir="ltr" className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs" />
-									<p className="mt-1 text-xs text-gray-400">يُولَّد تلقائياً من العنوان. عدّله فقط إن كنت تعرف ماذا تفعل.</p>
-								</details>
-
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-1">الملخص</label>
 									<textarea {...register(`translations.${index}.summary`)} rows={2}
+										maxLength={SUMMARY_MAX}
 										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
 										placeholder="جملة أو جملتان تظهران في صفحة قائمة المقالات..."
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
@@ -323,6 +359,25 @@ export default function PostForm({ post }: { post?: Post }) {
 				</div>
 
 				<aside className="space-y-6">
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-2">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">الرابط المختصر</h3>
+						<input
+							{...register("slug")}
+							dir="ltr"
+							maxLength={SLUG_MAX}
+							// readOnly, not disabled: react-hook-form drops a disabled input's value (submits undefined).
+							readOnly={slugLocked}
+							placeholder="hayat-al-imam-zain"
+							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm font-mono read-only:bg-gray-50 read-only:text-gray-500 read-only:cursor-not-allowed"
+						/>
+						{errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug.message}</p>}
+						{slugLocked ? (
+							<p className="mt-1 text-[11px] text-amber-700">الرابط ثابت لأن المقالة منشورة (رابطها العام قد شاركه الناس). ألغِ النشر أولاً إن كان لا بد من تغييره.</p>
+						) : (
+							<p className="mt-1 text-[11px] text-gray-400">يُولَّد تلقائياً من العنوان الافتراضي. رابط واحد لكل مقالة بجميع اللغات.</p>
+						)}
+					</div>
+
 					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-4">
 						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">حالة النشر</h3>
 						<label className="flex items-center justify-between cursor-pointer">
@@ -333,9 +388,14 @@ export default function PostForm({ post }: { post?: Post }) {
 							<input type="checkbox" {...register("is_published")} className="h-4 w-4 text-primary rounded" />
 						</label>
 						<div>
-							<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />تاريخ النشر</label>
-							<input type="datetime-local" {...register("published_at")} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
-							<p className="mt-1 text-[11px] text-gray-500">إن كان في المستقبل وحالة النشر غير مفعّلة → سيُنشر تلقائياً بواسطة المُجَدوِل عند حلول الموعد.</p>
+							<label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />{isPublished ? "تاريخ النشر" : "جدولة النشر"}</label>
+							<input type="datetime-local" {...register("published_at")} disabled={isPublished} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed" />
+							{errors.published_at && <p className="mt-1 text-sm text-red-600">{errors.published_at.message}</p>}
+							{isPublished ? (
+								<p className="mt-1 text-[11px] text-gray-500">المقالة المنشورة يُسجَّل لها وقت النشر تلقائياً عند الحفظ. لجدولتها لوقت لاحق: ألغِ خيار «منشور» ثم حدّد موعداً.</p>
+							) : (
+								<p className="mt-1 text-[11px] text-gray-500">حدّد موعداً مستقبلياً (بتوقيت جهازك) لتُنشر المقالة تلقائياً. قد يتأخر النشر حتى دقيقة عن الموعد. اتركه فارغاً لتبقى مسودة.</p>
+							)}
 						</div>
 						<label className="flex items-center justify-between cursor-pointer">
 							<span className="flex items-center gap-2 text-sm text-gray-900">

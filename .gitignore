@@ -20,6 +20,10 @@
 # production
 /build
 
+# Cloudflare Workers
+.wrangler/
+.dev.vars*
+
 # misc
 .DS_Store
 *.pem
@@ -32,6 +36,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# These two hold only the PUBLIC API URL (no secrets) and must reach CI / Workers
+# Builds, which build from a clean checkout.
+!.env.production
+!.env.local.example
 
 # vercel
 .vercel

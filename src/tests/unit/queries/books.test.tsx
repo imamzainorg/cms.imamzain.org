@@ -20,12 +20,16 @@ const mockBook: Book = {
 	id: "b1",
 	category_id: "c1",
 	cover_image_id: "m1",
+	slug: null,
 	isbn: null,
 	pages: null,
 	publish_year: null,
+	document_languages: [],
 	part_number: null,
-	parts: null,
 	views: 0,
+	is_published: true,
+	is_publication: false,
+	parts_count: 0,
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
 	book_translations: [
@@ -49,7 +53,7 @@ function wrapped(client: QueryClient) {
 
 describe("useBooksList", () => {
 	it("fetches books and unwraps the pagination payload", async () => {
-		server.use(http.get(`${API}/books`, () => HttpResponse.json(wrap(paginated([mockBook])))))
+		server.use(http.get(`${API}/books/admin`, () => HttpResponse.json(wrap(paginated([mockBook])))))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useBooksList({ page: 1, limit: 24 }), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -60,7 +64,7 @@ describe("useBooksList", () => {
 describe("useBook", () => {
 	it("skips fetch when id is undefined", async () => {
 		let called = false
-		server.use(http.get(`${API}/books/:id`, () => { called = true; return HttpResponse.json(wrap(mockBook)) }))
+		server.use(http.get(`${API}/books/admin/:id`, () => { called = true; return HttpResponse.json(wrap(mockBook)) }))
 		const client = buildQueryClient()
 		renderHook(() => useBook(undefined), { wrapper: wrapped(client) })
 		await new Promise((r) => setTimeout(r, 30))
@@ -68,7 +72,7 @@ describe("useBook", () => {
 	})
 
 	it("fetches a single book by id", async () => {
-		server.use(http.get(`${API}/books/b1`, () => HttpResponse.json(wrap(mockBook))))
+		server.use(http.get(`${API}/books/admin/b1`, () => HttpResponse.json(wrap(mockBook))))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useBook("b1"), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -80,7 +84,7 @@ describe("book mutations invalidate the list cache", () => {
 	it("useDeleteBook invalidates books.lists", async () => {
 		let listHits = 0
 		server.use(
-			http.get(`${API}/books`, () => { listHits++; return HttpResponse.json(wrap(paginated([mockBook]))) }),
+			http.get(`${API}/books/admin`, () => { listHits++; return HttpResponse.json(wrap(paginated([mockBook]))) }),
 			http.delete(`${API}/books/b1`, () => HttpResponse.json(wrap({ message: "ok" }))),
 		)
 		const client = buildQueryClient()
@@ -96,7 +100,7 @@ describe("book mutations invalidate the list cache", () => {
 	it("useCreateBook invalidates books.lists", async () => {
 		let listHits = 0
 		server.use(
-			http.get(`${API}/books`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
+			http.get(`${API}/books/admin`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
 			http.post(`${API}/books`, () => HttpResponse.json(wrap(mockBook))),
 		)
 		const client = buildQueryClient()
@@ -116,8 +120,8 @@ describe("book mutations invalidate the list cache", () => {
 
 	it("useUpdateBook invalidates list AND the specific detail", async () => {
 		server.use(
-			http.get(`${API}/books`, () => HttpResponse.json(wrap(paginated([mockBook])))),
-			http.get(`${API}/books/b1`, () => HttpResponse.json(wrap(mockBook))),
+			http.get(`${API}/books/admin`, () => HttpResponse.json(wrap(paginated([mockBook])))),
+			http.get(`${API}/books/admin/b1`, () => HttpResponse.json(wrap(mockBook))),
 			http.patch(`${API}/books/b1`, () => HttpResponse.json(wrap(mockBook))),
 		)
 		const client = buildQueryClient()

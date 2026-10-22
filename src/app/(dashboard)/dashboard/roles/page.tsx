@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react"
 import type { Role, Permission } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
+import { getAccountAdminErrorMessage } from "@/lib/rbac-errors"
 import { Plus, Trash2, Loader2, Shield, Check, Search, Pencil, KeyRound } from "lucide-react"
 import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
@@ -83,7 +84,7 @@ export default function RolesPage() {
 		if (!selected) return
 		togglePerm.mutate(
 			{ roleId: selected.id, permission, has },
-			{ onError: (e) => toast.error(getErrorMessage(e, "فشل تحديث الصلاحية")) },
+			{ onError: (e) => toast.error(getAccountAdminErrorMessage(e, "فشل تحديث الصلاحية")) },
 		)
 	}
 
@@ -100,7 +101,7 @@ export default function RolesPage() {
 				toast.success("تم حذف الدور")
 				if (selectedId === role.id) setSelectedId(null)
 			},
-			onError: (e) => toast.error(getErrorMessage(e, "تعذّر الحذف — قد يكون مُعيَّناً لمستخدمين")),
+			onError: (e) => toast.error(getAccountAdminErrorMessage(e, "تعذّر الحذف — قد يكون مُعيَّناً لمستخدمين")),
 		})
 	}
 
@@ -331,7 +332,7 @@ function RoleDialog({
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault()
 		const body = {
-			name,
+			name: name.trim(),
 			translations: [{ lang: "ar", title, description: description || undefined }],
 		}
 		const handlers = {
@@ -339,7 +340,7 @@ function RoleDialog({
 				toast.success(initial ? "تم تحديث الدور" : "تم إنشاء الدور")
 				onSaved()
 			},
-			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل الحفظ")),
+			onError: (e: unknown) => toast.error(getAccountAdminErrorMessage(e, "فشل الحفظ")),
 		}
 		if (initial) {
 			updateRole.mutate({ id: initial.id, body }, handlers)
@@ -354,18 +355,18 @@ function RoleDialog({
 				<div className="p-6 space-y-4">
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">المعرّف (slug)</label>
-						<input required value={name} onChange={(e) => setName(e.target.value)} dir="ltr" placeholder="editor"
+						<input required minLength={2} maxLength={50} value={name} onChange={(e) => setName(e.target.value)} dir="ltr" placeholder="editor"
 							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono" />
 						<p className="mt-1 text-xs text-gray-500">معرّف داخلي بالحروف اللاتينية (مثل editor، admin)</p>
 					</div>
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">الاسم بالعربية</label>
-						<input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="محرّر"
+						<input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="محرّر"
 							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 					</div>
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
-						<textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="وصف اختياري للدور"
+						<textarea value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="وصف اختياري للدور"
 							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 					</div>
 				</div>

@@ -17,6 +17,25 @@ describe("useListPage", () => {
 		expect(result.current.page).toBe(1)
 	})
 
+	it("never promotes a search shorter than 2 characters (the API 400s on it)", async () => {
+		const { result } = renderHook(() => useListPage({ debounceMs: 20 }))
+		act(() => result.current.setSearch("a"))
+		await new Promise((r) => setTimeout(r, 80))
+		expect(result.current.debouncedSearch).toBe("")
+
+		// Padding doesn't count: the API trims before measuring.
+		act(() => result.current.setSearch(" a "))
+		await new Promise((r) => setTimeout(r, 80))
+		expect(result.current.debouncedSearch).toBe("")
+
+		act(() => result.current.setSearch(" ab "))
+		await waitFor(() => expect(result.current.debouncedSearch).toBe("ab"))
+
+		// Deleting back down to one character drops the search again.
+		act(() => result.current.setSearch("a"))
+		await waitFor(() => expect(result.current.debouncedSearch).toBe(""))
+	})
+
 	it("setLimit resets page to 1", () => {
 		const { result } = renderHook(() => useListPage())
 		act(() => result.current.setPage(5))

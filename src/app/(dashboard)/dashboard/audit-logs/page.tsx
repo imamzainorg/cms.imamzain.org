@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { safeFormat } from "@/lib/dates"
 import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
+import { AUDIT_ACTION_GROUPS, AUDIT_RESOURCE_OPTIONS, specialAuditLabel } from "@/lib/audit-vocabulary"
 import { useAuditLogsList } from "@/lib/queries/audit-logs"
 import { useListPage } from "@/lib/use-list-page"
 
@@ -122,12 +123,12 @@ export default function AuditLogsPage() {
 							className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer bg-white"
 						>
 							<option value="">كل الإجراءات</option>
-							<option value="CREATE">إنشاء</option>
-							<option value="UPDATE">تحديث</option>
-							<option value="DELETE">حذف</option>
-							<option value="LOGIN">تسجيل دخول</option>
-							<option value="LOGOUT">تسجيل خروج</option>
-							<option value="UPLOAD">رفع</option>
+							{/* The API matches `action` EXACTLY, so each option carries the stored literal. */}
+							{AUDIT_ACTION_GROUPS.map((g) => (
+								<optgroup key={g.label} label={g.label}>
+									{g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+								</optgroup>
+							))}
 						</select>
 					</div>
 					<div>
@@ -138,15 +139,7 @@ export default function AuditLogsPage() {
 							className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer bg-white"
 						>
 							<option value="">كل الأنواع</option>
-							<option value="post">مقالات</option>
-							<option value="book">كتب</option>
-							<option value="academic-paper">أبحاث</option>
-							<option value="gallery">معرض</option>
-							<option value="media">وسائط</option>
-							<option value="user">مستخدمون</option>
-							<option value="role">أدوار</option>
-							<option value="contact">رسائل تواصل</option>
-							<option value="newsletter">نشرة بريدية</option>
+							{AUDIT_RESOURCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
 						</select>
 					</div>
 					<div>
@@ -187,6 +180,7 @@ export default function AuditLogsPage() {
 							const isExp = expanded === log.id
 							const hasChanges = log.changes && Object.keys(log.changes).length > 0
 							const action = humanizeAuditAction(log.action)
+							const special = specialAuditLabel(log)
 							const resourceLabel = humanizeResource(log.resource_type)
 							const resourceTitle = pickResourceTitle(log)
 							const username = log.users?.username || "النظام"
@@ -200,11 +194,18 @@ export default function AuditLogsPage() {
 
 										<div className="flex-1 min-w-0">
 											<div className="flex items-baseline gap-2 flex-wrap">
-												<span className="text-sm text-gray-900">
-													<span className="font-medium">{username}</span>
-													<span className="text-gray-500 mx-1">{action.verb || "نفّذ"}</span>
-													<span className="font-medium text-primary">{resourceLabel}</span>
-												</span>
+												{special ? (
+													<span className="text-sm text-gray-900">
+														<span className="font-medium text-primary">{special}</span>
+														{log.users && <span className="text-gray-500 mx-1">— {username}</span>}
+													</span>
+												) : (
+													<span className="text-sm text-gray-900">
+														<span className="font-medium">{username}</span>
+														<span className="text-gray-500 mx-1">{action.verb || "نفّذ"}</span>
+														<span className="font-medium text-primary">{resourceLabel}</span>
+													</span>
+												)}
 												{resourceTitle && (
 													<span className="text-sm text-gray-700 truncate">«{resourceTitle}»</span>
 												)}

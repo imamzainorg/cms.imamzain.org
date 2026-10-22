@@ -122,7 +122,7 @@ describe("media hooks", () => {
 describe("gallery hooks", () => {
 	it("useGalleryList paginates", async () => {
 		let hit = false
-		server.use(http.get(`${API}/gallery`, () => { hit = true; return HttpResponse.json(wrap(paginated([])))}))
+		server.use(http.get(`${API}/gallery/admin`, () => { hit = true; return HttpResponse.json(wrap(paginated([])))}))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useGalleryList(), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -132,7 +132,7 @@ describe("gallery hooks", () => {
 	it("create/delete invalidate the gallery list", async () => {
 		let listHits = 0
 		server.use(
-			http.get(`${API}/gallery`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
+			http.get(`${API}/gallery/admin`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
 			http.post(`${API}/gallery`, () => HttpResponse.json(wrap({}))),
 			http.delete(`${API}/gallery/m1`, () => HttpResponse.json(wrap({}))),
 		)

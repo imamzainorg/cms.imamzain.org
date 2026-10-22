@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "sonner"
 import { useAuthStore } from "@/store/auth"
 import Sidebar from "@/components/layout/Sidebar"
@@ -14,7 +14,12 @@ export default function DashboardLayoutInner({
 	children: React.ReactNode
 }) {
 	const router = useRouter()
+	const pathname = usePathname()
 	const { user, isLoading, checkAuth } = useAuthStore()
+	// An admin-reset account must pick its own password before doing anything
+	// else; the API refuses every other route for it once enforcement is on.
+	const mustChangePassword = !!user?.must_change_password
+	const onProfile = pathname.startsWith("/dashboard/profile")
 
 	useEffect(() => {
 		checkAuth()
@@ -26,6 +31,10 @@ export default function DashboardLayoutInner({
 		}
 	}, [user, isLoading, router])
 
+	useEffect(() => {
+		if (mustChangePassword && !onProfile) router.replace("/dashboard/profile")
+	}, [mustChangePassword, onProfile, router])
+
 	if (isLoading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -35,6 +44,7 @@ export default function DashboardLayoutInner({
 	}
 
 	if (!user) return null
+	if (mustChangePassword && !onProfile) return null
 
 	return (
 		<PageTitleProvider>

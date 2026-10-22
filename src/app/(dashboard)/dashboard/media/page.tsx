@@ -1,9 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import type { MediaRecord } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorCode } from "@/lib/api"
+import Badge from "@/components/ui/Badge"
+import { describeVariants, describeReference } from "@/lib/media-status"
+import { editHref } from "@/lib/routes"
 import Pagination from "@/components/ui/Pagination"
 import EmptyState from "@/components/ui/EmptyState"
 import Modal from "@/components/ui/Modal"
@@ -13,7 +17,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { humanizeMime, humanizeFileSize } from "@/lib/humanize"
 import {
 	Copy, Trash2, Loader2, Image as ImageIcon, Search, Upload, Pencil, Save,
-	FileText, Grid3x3, List as ListIcon, Download, Library, RefreshCw,
+	FileText, Grid3x3, List as ListIcon, Download, Library, RefreshCw, Link2,
 } from "lucide-react"
 import { safeFormat } from "@/lib/dates"
 import {
@@ -22,6 +26,7 @@ import {
 	useUpdateMedia,
 	useDeleteMedia,
 	useRegenerateVariants,
+	useMediaReferences,
 } from "@/lib/queries/media"
 import { useListPage } from "@/lib/use-list-page"
 
@@ -45,6 +50,8 @@ export default function MediaPage() {
 	const [mimeType, setMimeType] = useState("")
 	const [view, setView] = useState<ViewMode>("grid")
 	const [editing, setEditing] = useState<MediaRecord | null>(null)
+	// Which file's "where is it used" panel is open (the delete flow opens it too).
+	const [showUsageFor, setShowUsageFor] = useState<string | null>(null)
 	const { confirm, dialog } = useConfirm()
 
 	const onMimeChange = (v: string) => {
@@ -77,14 +84,24 @@ export default function MediaPage() {
 	const handleDelete = async (item: MediaRecord) => {
 		const ok = await confirm({
 			title: `حذف "${item.filename}"؟`,
-			description: "سيفشل الحذف إذا كان الملف مستخدماً في محتوى منشور. لا يمكن التراجع.",
+			description: "يُحذف الملف نهائياً من التخزين ولا يمكن التراجع. يُرفض الحذف إذا كان الملف ما زال مستخدماً في محتوى (حتى المحتوى المحذوف في السلة).",
 			confirmText: "حذف",
 			tone: "danger",
 		})
 		if (!ok) return
 		deleteMediaMutation.mutate(item.id, {
 			onSuccess: () => { toast.success("تم الحذف"); setEditing(null) },
-			onError: (e) => toast.error(getErrorMessage(e, "تعذّر الحذف — قد يكون مستخدماً في محتوى")),
+			onError: (e) => {
+				if (getErrorCode(e) === "MEDIA_IN_USE") {
+					// Keep the dialog open and expand the "where is it used" panel:
+					// the server text names records by id, which editors can't use.
+					setEditing(item)
+					setShowUsageFor(item.id)
+					toast.error("لا يمكن حذف الملف لأنه مستخدم في المحتوى المذكور في النافذة — أزل الصورة من تلك العناصر أولاً.")
+					return
+				}
+				toast.error(getErrorMessage(e, "تعذّر الحذف"))
+			},
 		})
 	}
 
@@ -117,7 +134,13 @@ export default function MediaPage() {
 
 	const handleRegenerate = (m: MediaRecord) => {
 		regenerateVariants.mutate(m.id, {
-			onSuccess: () => toast.success("تم إعادة توليد المتغيّرات"),
+			onSuccess: ({ data }) => {
+				// The API answers 200 even when nothing could be made: read the verdict.
+				const verdict = describeVariants(data)
+				if (verdict?.status === "ready") toast.success("تم توليد النسخ")
+				else toast.warning(verdict?.detail ?? "لم تُولَّد نسخ جديدة")
+				if (editing?.id === data.id) setEditing(data)
+			},
 			onError: (e) => toast.error(getErrorMessage(e, "تعذّر إعادة التوليد")),
 		})
 	}
@@ -130,7 +153,7 @@ export default function MediaPage() {
 		<div className="space-y-6">
 			<PageHeader
 				title="مكتبة الوسائط"
-				description="كل الصور والملفات المرفوعة. كل صورة تُولَّد لها متغيّرات WebP (320/768/1280/1920) تلقائياً عند الرفع."
+				description="كل الصور المرفوعة. تُولَّد لكل صورة نسخ WebP (320/768/1280/1920 بكسل، دون تكبير) تلقائياً في الخلفية بعد الرفع، وقد تستغرق ثوانيَ."
 				icon={Library}
 				actions={
 					<label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 shadow-sm transition-colors ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
@@ -187,7 +210,7 @@ export default function MediaPage() {
 				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
 					{media.map((m) => {
 						const isImage = m.mime_type?.startsWith("image/")
-						const variantsBroken = isImage && m.variants && m.variants.length === 0
+						const verdict = describeVariants(m)
 						return (
 							<div
 								key={m.id}
@@ -202,9 +225,14 @@ export default function MediaPage() {
 										<p className="mt-1 text-[10px] text-gray-600 truncate w-full text-center">{humanizeMime(m.mime_type)}</p>
 									</div>
 								)}
-								{variantsBroken && (
+								{verdict?.status === "partial" && (
 									<span className="absolute top-1 right-1 text-[10px] bg-amber-500/95 text-white px-1.5 py-0.5 rounded-full">
-										بدون متغيّرات
+										{verdict.label}
+									</span>
+								)}
+								{verdict?.status === "processing" && (
+									<span className="absolute top-1 right-1 inline-flex items-center gap-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded-full">
+										<Loader2 className="h-3 w-3 animate-spin" />{verdict.label}
 									</span>
 								)}
 								<div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -233,7 +261,7 @@ export default function MediaPage() {
 						<tbody className="bg-white divide-y divide-gray-100">
 							{media.map((m) => {
 								const isImage = m.mime_type?.startsWith("image/")
-								const variantsCount = m.variants?.length ?? 0
+								const verdict = describeVariants(m)
 								return (
 									<tr key={m.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setEditing(m)}>
 										<td className="px-4 py-2.5">
@@ -251,12 +279,8 @@ export default function MediaPage() {
 										<td className="px-4 py-2.5 text-sm text-gray-500">{humanizeFileSize(m.file_size)}</td>
 										<td className="px-4 py-2.5 text-sm text-gray-500">{m.width && m.height ? `${m.width}×${m.height}` : "—"}</td>
 										<td className="px-4 py-2.5 text-sm">
-											{isImage ? (
-												variantsCount > 0 ? (
-													<span className="text-green-700 text-xs">{variantsCount} متغيّرات</span>
-												) : (
-													<span className="text-amber-600 text-xs">بدون</span>
-												)
+											{verdict ? (
+												<Badge variant={verdict.tone} size="sm">{verdict.label}</Badge>
 											) : "—"}
 										</td>
 										<td className="px-4 py-2.5 text-sm text-gray-500">{safeFormat(m.created_at, "dd/MM/yyyy")}</td>
@@ -292,6 +316,8 @@ export default function MediaPage() {
 					onCopy={copy}
 					onRegenerate={() => handleRegenerate(editing)}
 					regenerating={regenerateVariants.isPending}
+					usageOpen={showUsageFor === editing.id}
+					onToggleUsage={() => setShowUsageFor(showUsageFor === editing.id ? null : editing.id)}
 				/>
 			)}
 			{dialog}
@@ -300,7 +326,7 @@ export default function MediaPage() {
 }
 
 function MediaEditDialog({
-	media, onClose, onSave, onDelete, onCopy, onRegenerate, regenerating,
+	media, onClose, onSave, onDelete, onCopy, onRegenerate, regenerating, usageOpen, onToggleUsage,
 }: {
 	media: MediaRecord
 	onClose: () => void
@@ -309,13 +335,15 @@ function MediaEditDialog({
 	onCopy: (s: string) => void
 	onRegenerate: () => void
 	regenerating: boolean
+	usageOpen: boolean
+	onToggleUsage: () => void
 }) {
 	const [filename, setFilename] = useState(media.filename)
 	const [altText, setAltText] = useState(media.alt_text ?? "")
 	const [saving, setSaving] = useState(false)
 	const isImage = media.mime_type?.startsWith("image/")
-	const variantsCount = media.variants?.length ?? 0
-	const variantsBroken = isImage && variantsCount === 0
+	const verdict = describeVariants(media)
+	const references = useMediaReferences(media.id, usageOpen)
 
 	useEffect(() => {
 		setFilename(media.filename)
@@ -372,12 +400,12 @@ function MediaEditDialog({
 				<div className="md:col-span-2 p-6 space-y-4">
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">اسم الملف</label>
-						<input value={filename} onChange={(e) => setFilename(e.target.value)} dir="ltr"
+						<input value={filename} maxLength={255} onChange={(e) => setFilename(e.target.value)} dir="ltr"
 							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">النص البديل (Alt)</label>
-						<textarea value={altText} onChange={(e) => setAltText(e.target.value)} rows={3}
+						<textarea value={altText} maxLength={500} onChange={(e) => setAltText(e.target.value)} rows={3}
 							placeholder="وصف يظهر للقارئ بدلاً من الصورة. مهمّ لمحركات البحث وللوصول."
 							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 					</div>
@@ -397,36 +425,91 @@ function MediaEditDialog({
 								<button onClick={() => onCopy(media.url)} className="cursor-pointer p-2 text-primary hover:bg-primary/5 rounded" title="نسخ"><Copy className="h-4 w-4" /></button>
 							</div>
 						</div>
-						{isImage && (
+						{verdict && (
 							<div className="col-span-2 border-t border-gray-100 pt-3">
 								<label className="block text-xs font-medium text-gray-500 mb-2">
-									متغيّرات WebP (للعرض على الموقع العام)
+									نسخ WebP (للعرض على الموقع العام)
 								</label>
-								{variantsBroken ? (
-									<div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-md p-3">
-										<p className="text-xs text-amber-800">
-											فشل توليد المتغيّرات. اضغط لإعادة المحاولة.
-										</p>
-										<button
-											onClick={onRegenerate}
-											disabled={regenerating}
-											className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
-										>
-											{regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-											إعادة توليد
-										</button>
+								{verdict.status === "partial" ? (
+									<div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-md p-3">
+										<p className="text-xs text-amber-800">{verdict.detail}</p>
+										{verdict.canRegenerate && (
+											<button
+												onClick={onRegenerate}
+												disabled={regenerating}
+												className="cursor-pointer shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+											>
+												{regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+												إعادة توليد
+											</button>
+										)}
 									</div>
-								) : (
+								) : verdict.status === "processing" ? (
+									<p className="inline-flex items-center gap-2 text-xs text-gray-600">
+										<Loader2 className="h-3.5 w-3.5 animate-spin" />{verdict.detail}
+									</p>
+								) : verdict.status === "ready" ? (
 									<div className="flex flex-wrap gap-1.5">
-										{media.variants!.map((v) => (
+										{media.variants.map((v) => (
 											<span key={v.width} className="px-2 py-0.5 bg-green-50 text-green-800 text-xs rounded-full">
 												{v.width}px · {humanizeFileSize(v.file_size)}
 											</span>
 										))}
 									</div>
+								) : (
+									<p className="text-xs text-gray-600 leading-relaxed">{verdict.detail}</p>
 								)}
 							</div>
 						)}
+
+						<div className="col-span-2 border-t border-gray-100 pt-3">
+							<button
+								type="button"
+								onClick={onToggleUsage}
+								className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+							>
+								<Link2 className="h-3.5 w-3.5" />
+								{usageOpen ? "إخفاء أماكن الاستخدام" : "أين يُستخدم هذا الملف؟"}
+							</button>
+							{usageOpen && (
+								<div className="mt-2">
+									{references.isLoading ? (
+										<Loader2 className="h-4 w-4 animate-spin text-primary" />
+									) : references.isError ? (
+										<p className="text-xs text-red-700">{getErrorMessage(references.error, "تعذّر تحميل أماكن الاستخدام")}</p>
+									) : references.data && references.data.total === 0 ? (
+										<p className="text-xs text-green-700">لا يستخدمه أي محتوى — يمكن حذفه بأمان.</p>
+									) : references.data ? (
+										<>
+											<ul className="space-y-1">
+												{references.data.items.map((r, i) => {
+													const href =
+														r.type === "post" ? editHref.post(r.id)
+														: r.type === "book" ? editHref.book(r.id)
+														: r.type === "static_page" ? editHref.staticPage(r.id)
+														: "/dashboard/gallery"
+													return (
+														<li key={`${r.type}-${r.id}-${r.field}-${r.lang ?? ""}-${i}`} className="flex items-center justify-between gap-2 text-xs bg-gray-50 border border-gray-100 rounded px-2.5 py-1.5">
+															<span className="text-gray-800">{describeReference(r)}</span>
+															<span className="flex items-center gap-2 shrink-0">
+																{r.trashed && <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">في السلة</span>}
+																{r.trashed ? null : <Link href={href} className="text-primary hover:underline">فتح</Link>}
+															</span>
+														</li>
+													)
+												})}
+											</ul>
+											{references.data.truncated && (
+												<p className="mt-1.5 text-[11px] text-gray-500">يظهر أول {references.data.shown} من أصل {references.data.total}.</p>
+											)}
+											<p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed">
+												المحتوى الموجود في السلة يحتفظ بالصورة أيضاً — استعده من السلة ثم غيّر صورته أو أزلها منه، وبعدها يمكن حذف الملف.
+											</p>
+										</>
+									) : null}
+								</div>
+							)}
+						</div>
 					</div>
 				</div>
 			</div>

@@ -1,11 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import type { DailyHadith, DailyHadithTranslation } from "@/types"
+import type { DailyHadith, DailyHadithTranslation, HadithCalendarItem } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
-import { Loader2, BookOpenText, Plus, Pencil, Trash2, Pin, PinOff, Globe, Power, Eye, EyeOff } from "lucide-react"
-import { format } from "date-fns"
+import { getErrorMessage, getErrorStatus } from "@/lib/api"
+import {
+	Loader2,
+	BookOpenText,
+	Plus,
+	Pencil,
+	Trash2,
+	CalendarDays,
+	CalendarClock,
+	Globe,
+	AlertTriangle,
+} from "lucide-react"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
 import Modal from "@/components/ui/Modal"
@@ -14,57 +23,55 @@ import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { ListSkeleton } from "@/components/ui/Skeleton"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import {
-	useDailyHadithsList,
+	useHadithCalendar,
+	useDailyHadith,
 	useTodayHadith,
-	useHadithPins,
+	useHijriDate,
+	useSetHijriDate,
 	useCreateHadith,
 	useUpdateHadith,
 	useDeleteHadith,
-	usePinHadith,
-	useUnpinHadith,
 } from "@/lib/queries/daily-hadiths"
 import { useTranslationsField } from "@/lib/use-translations-field"
+import { useHasPermission } from "@/lib/permissions"
+import { HIJRI_MONTHS, formatHijriDay, hijriMonthName } from "@/lib/hijri"
 
 type DialogState =
 	| { mode: "create" }
-	| { mode: "edit"; hadith: DailyHadith }
-	| { mode: "pin"; hadith: DailyHadith }
+	| { mode: "edit"; id: string }
+	| { mode: "hijri-date" }
 	| null
+
+const PAGE_SIZES = [30, 60, 100]
 
 export default function DailyHadithsPage() {
 	const { confirm, dialog: confirmDialog } = useConfirm()
 	const [dialog, setDialog] = useState<DialogState>(null)
 	const [page, setPage] = useState(1)
-	const [limit, setLimit] = useState(20)
+	const [limit, setLimit] = useState(PAGE_SIZES[0])
+	// "" = every month, calendar order, hadiths without a day last.
+	const [month, setMonth] = useState("")
 
-	const listQuery = useDailyHadithsList({ page, limit })
-	const todayQuery = useTodayHadith()
-	const pinsQuery = useHadithPins()
+	const calendarQuery = useHadithCalendar({
+		page,
+		limit,
+		...(month ? { hijri_month: Number(month) } : {}),
+	})
+	const canUpdate = useHasPermission("daily-hadiths:update")
 
-	const hadiths = listQuery.data?.items ?? []
-	const total = listQuery.data?.pagination.total ?? 0
-	const pages = listQuery.data?.pagination.pages ?? 1
-	const today = todayQuery.data
-	const pins = pinsQuery.data ?? []
+	const hadiths = calendarQuery.data?.items ?? []
+	const total = calendarQuery.data?.pagination.total ?? 0
+	const pages = calendarQuery.data?.pagination.pages ?? 1
 
-	const updateHadith = useUpdateHadith()
 	const deleteHadith = useDeleteHadith()
-	const unpinHadith = useUnpinHadith()
 
-	const toggleActive = (h: DailyHadith) => {
-		updateHadith.mutate(
-			{ id: h.id, body: { is_active: !h.is_active } },
-			{
-				onSuccess: () => toast.success(h.is_active ? "تم التعطيل" : "تم التفعيل"),
-				onError: (e) => toast.error(getErrorMessage(e, "فشل التحديث")),
-			},
-		)
-	}
-
-	const handleDelete = async (h: DailyHadith) => {
+	const handleDelete = async (h: HadithCalendarItem) => {
+		const day = formatHijriDay(h.hijri_month, h.hijri_day)
 		const ok = await confirm({
 			title: "حذف هذا الحديث؟",
-			description: "سيُحذف من التدوير. أيّ تثبيتات على تواريخ مستقبلية ستصبح غير فعّالة.",
+			description: day
+				? `سيُحذف الحديث، ويصبح يوم ${day} متاحاً لحديث آخر فوراً. يمكنك استعادته من سلة المهملات.`
+				: "سيُنقل الحديث إلى سلة المهملات.",
 			confirmText: "حذف",
 			tone: "danger",
 		})
@@ -75,23 +82,11 @@ export default function DailyHadithsPage() {
 		})
 	}
 
-	const handleUnpin = (pin_date: string) => {
-		unpinHadith.mutate(pin_date, {
-			onSuccess: () => toast.success("أُلغي التثبيت"),
-			onError: (e) => toast.error(getErrorMessage(e, "فشل")),
-		})
-	}
-
-	const previewOf = (h: DailyHadith) => {
-		const t = h.translation ?? h.daily_hadith_translations[0]
-		return t?.content || ""
-	}
-
 	return (
 		<div className="space-y-6">
 			<PageHeader
 				title="الأحاديث اليومية"
-				description="حديث واحد لكل يوم على الصفحة الرئيسية. يدور تلقائياً عبر الأحاديث النشطة، أو ثبّت حديثاً لتاريخ محدّد."
+				description="لكل يوم من أيام السنة الهجرية حديث واحد، يُعرض في ذلك اليوم من كل عام بحسب التاريخ الهجري الذي يعلنه مكتب السيد السيستاني. الحديث بلا يوم محفوظ لكنه لا يظهر على الموقع."
 				icon={BookOpenText}
 				actions={
 					<button onClick={() => setDialog({ mode: "create" })} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
@@ -100,36 +95,27 @@ export default function DailyHadithsPage() {
 				}
 			/>
 
-			{today && (
-				<div className="bg-linear-to-l from-primary/5 to-secondary/5 border border-primary/20 rounded-xl p-5">
-					<div className="flex items-center gap-2 mb-2">
-						<span className="text-xs font-semibold text-primary uppercase tracking-wide">حديث اليوم</span>
-						{today.is_pinned && <span className="px-2 py-0.5 text-[10px] bg-secondary/20 text-secondary-foreground rounded-full inline-flex items-center gap-1"><Pin className="h-2.5 w-2.5" />مثبّت</span>}
-					</div>
-					<p className="text-base text-gray-900 leading-loose">{today.content}</p>
-					{today.source && <p className="text-xs text-gray-500 mt-2">— {today.source}</p>}
-				</div>
-			)}
+			<TodayCard canSetDate={canUpdate} onSetDate={() => setDialog({ mode: "hijri-date" })} />
 
-			{pins.length > 0 && (
-				<div className="bg-white border border-gray-200 rounded-xl p-4">
-					<h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-						<Pin className="h-4 w-4" />التثبيتات المجدولة ({pins.length})
-					</h3>
-					<div className="flex flex-wrap gap-2">
-						{pins.map((p) => (
-							<div key={p.pin_date} className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-xs">
-								<span className="text-amber-900 font-mono">{p.pin_date}</span>
-								<button onClick={() => handleUnpin(p.pin_date)} className="cursor-pointer text-amber-700 hover:text-red-600" title="إلغاء التثبيت">
-									<PinOff className="h-3 w-3" />
-								</button>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
+			<div className="flex flex-wrap items-center gap-3">
+				<label htmlFor="hadith-month" className="text-sm font-medium text-gray-700">الشهر الهجري</label>
+				<select
+					id="hadith-month"
+					value={month}
+					onChange={(e) => { setMonth(e.target.value); setPage(1) }}
+					className="cursor-pointer px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm bg-white"
+				>
+					<option value="">كل الأشهر (بحسب ترتيب التقويم)</option>
+					{HIJRI_MONTHS.map((name, i) => (
+						<option key={name} value={i + 1}>{name}</option>
+					))}
+				</select>
+				{!month && (
+					<span className="text-xs text-gray-500">الأحاديث التي بلا يوم تظهر في آخر القائمة.</span>
+				)}
+			</div>
 
-			{listQuery.isLoading ? (
+			{calendarQuery.isLoading ? (
 				<div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 					<ListSkeleton rows={5} />
 				</div>
@@ -137,43 +123,46 @@ export default function DailyHadithsPage() {
 				<EmptyState
 					variant="card"
 					icon={BookOpenText}
-					title="لا توجد أحاديث بعد"
-					description="أضف أوّل حديث ليبدأ التدوير اليومي على الصفحة الرئيسية."
+					title={month ? `لا توجد أحاديث في شهر ${hijriMonthName(Number(month))}` : "لا توجد أحاديث بعد"}
+					description="أضف حديثاً وحدّد له اليوم الهجري الذي يُعرض فيه كل عام."
 					action={(
 						<button onClick={() => setDialog({ mode: "create" })} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90">
-							<Plus className="h-4 w-4" />أضف أوّل حديث
+							<Plus className="h-4 w-4" />أضف حديثاً
 						</button>
 					)}
 				/>
 			) : (
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-					{hadiths.map((h) => (
-						<div key={h.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/30 hover:shadow-md transition-all">
-							<div className="flex items-start justify-between mb-3">
-								<div className="flex items-center gap-2">
-									<span className="text-[11px] font-mono text-gray-400">#{h.display_order ?? "—"}</span>
-									<button onClick={() => toggleActive(h)} className={`cursor-pointer text-[11px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${h.is_active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-										{h.is_active ? <><Eye className="h-3 w-3" />نشط</> : <><EyeOff className="h-3 w-3" />معطّل</>}
-									</button>
-									<span className="text-[11px] text-gray-400 inline-flex items-center gap-1">
-										<Globe className="h-3 w-3" />{h.daily_hadith_translations.length} ترجمة
-									</span>
+					{hadiths.map((h) => {
+						const day = formatHijriDay(h.hijri_month, h.hijri_day)
+						return (
+							<div key={h.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/30 hover:shadow-md transition-all">
+								<div className="flex items-start justify-between mb-3">
+									{day ? (
+										<span className="text-xs font-medium inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary-foreground">
+											<CalendarDays className="h-3.5 w-3.5" />{day}
+										</span>
+									) : (
+										<span className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700" title="لن يظهر هذا الحديث على الموقع حتى يُحدَّد له يوم">
+											<AlertTriangle className="h-3.5 w-3.5" />بلا يوم — لا يظهر على الموقع
+										</span>
+									)}
+									<div className="flex gap-1">
+										<button onClick={() => setDialog({ mode: "edit", id: h.id })} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Pencil className="h-4 w-4" /></button>
+										<button onClick={() => handleDelete(h)} className="cursor-pointer p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="حذف"><Trash2 className="h-4 w-4" /></button>
+									</div>
 								</div>
-								<div className="flex gap-1">
-									<button onClick={() => setDialog({ mode: "pin", hadith: h })} className="cursor-pointer p-1.5 text-gray-400 hover:text-secondary hover:bg-secondary/10 rounded" title="تثبيت لتاريخ"><Pin className="h-4 w-4" /></button>
-									<button onClick={() => setDialog({ mode: "edit", hadith: h })} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Pencil className="h-4 w-4" /></button>
-									<button onClick={() => toggleActive(h)} className="cursor-pointer p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded" title={h.is_active ? "تعطيل" : "تفعيل"}><Power className="h-4 w-4" /></button>
-									<button onClick={() => handleDelete(h)} className="cursor-pointer p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="حذف"><Trash2 className="h-4 w-4" /></button>
-								</div>
+								<p className="text-sm text-gray-800 leading-relaxed line-clamp-4">{h.content}</p>
+								{h.source && <p className="text-xs text-gray-500 mt-2">— {h.source}</p>}
 							</div>
-							<p className="text-sm text-gray-800 leading-relaxed line-clamp-4">{previewOf(h)}</p>
-						</div>
-					))}
+						)
+					})}
 				</div>
 			)}
 
 			<Pagination
 				page={page} pages={pages} total={total} limit={limit}
+				pageSizes={PAGE_SIZES}
 				onPage={setPage}
 				onLimit={(n) => { setLimit(n); setPage(1) }}
 			/>
@@ -182,14 +171,171 @@ export default function DailyHadithsPage() {
 				<HadithEditor onClose={() => setDialog(null)} />
 			)}
 			{dialog?.mode === "edit" && (
-				<HadithEditor initial={dialog.hadith} onClose={() => setDialog(null)} />
+				<HadithEditorLoader id={dialog.id} onClose={() => setDialog(null)} />
 			)}
-			{dialog?.mode === "pin" && (
-				<PinDialog hadith={dialog.hadith} onClose={() => setDialog(null)} />
+			{dialog?.mode === "hijri-date" && (
+				<SetHijriDateModal onClose={() => setDialog(null)} />
 			)}
 			{confirmDialog}
 		</div>
 	)
+}
+
+/** Today's Hijri date (from the API, never computed here) and today's hadith. */
+function TodayCard({ canSetDate, onSetDate }: { canSetDate: boolean; onSetDate: () => void }) {
+	const todayQuery = useTodayHadith()
+	const hijri = todayQuery.data?.meta?.hijri
+	const hadith = todayQuery.data?.hadith
+
+	if (todayQuery.isLoading) {
+		return <div className="bg-white border border-gray-200 rounded-xl p-5 h-28 animate-pulse" />
+	}
+	if (todayQuery.isError) {
+		return (
+			<div className="bg-white border border-red-200 rounded-xl p-5 text-sm text-red-700">
+				تعذّر تحميل حديث اليوم والتاريخ الهجري.
+			</div>
+		)
+	}
+
+	return (
+		<div className="bg-linear-to-l from-primary/5 to-secondary/5 border border-primary/20 rounded-xl p-5">
+			<div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+				<div className="flex flex-wrap items-center gap-2">
+					<span className="text-xs font-semibold text-primary tracking-wide">حديث اليوم</span>
+					{hijri && (
+						<span className="text-sm font-medium text-gray-900">
+							{hijri.day} {hijri.month_name} {hijri.year} هـ
+						</span>
+					)}
+					{hijri?.provisional && (
+						<span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700" title="لم يُقرأ بعد إعلان بداية الشهر من موقع المكتب، فهذا اليوم تقديري إلى أن يتحقق النظام منه خلال ساعة تقريباً.">
+							مؤقت — بانتظار إعلان الشهر
+						</span>
+					)}
+					{hijri?.source === "manual" && (
+						<span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">مضبوط يدوياً</span>
+					)}
+					{hijri?.source === "calendar" && (
+						<span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" title="تقويم أم القرى — يُستعمل فقط إلى أن يُقرأ موقع المكتب">
+							تقويم أم القرى
+						</span>
+					)}
+				</div>
+				{canSetDate && (
+					<button onClick={onSetDate} className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
+						<CalendarClock className="h-3.5 w-3.5" />ضبط التاريخ الهجري يدوياً
+					</button>
+				)}
+			</div>
+			{hadith ? (
+				<>
+					<p className="text-base text-gray-900 leading-loose">{hadith.content}</p>
+					{hadith.source && <p className="text-xs text-gray-500 mt-2">— {hadith.source}</p>}
+				</>
+			) : (
+				<p className="text-sm text-gray-600">لا يوجد حديث لهذا اليوم الهجري — أضف حديثاً وحدّد له هذا اليوم.</p>
+			)}
+		</div>
+	)
+}
+
+/** Corrects *today's* Hijri date when the announcement and sistani.org disagree. */
+function SetHijriDateModal({ onClose }: { onClose: () => void }) {
+	const hijriQuery = useHijriDate()
+	const setDate = useSetHijriDate()
+	const current = hijriQuery.data
+
+	const [year, setYear] = useState<string>("")
+	const [month, setMonth] = useState<string>("")
+	const [day, setDay] = useState<string>("")
+	// Seed from the live date once it arrives, without clobbering later edits.
+	const [seeded, setSeeded] = useState(false)
+	if (current && !seeded) {
+		setSeeded(true)
+		setYear(String(current.year))
+		setMonth(String(current.month))
+		setDay(String(current.day))
+	}
+
+	const handleSubmit = (e: React.FormEvent) => {
+		e.preventDefault()
+		const y = Number(year), m = Number(month), d = Number(day)
+		if (!Number.isInteger(y) || y < 1300 || y > 1700) { toast.error("أدخل سنة هجرية صحيحة"); return }
+		if (!m) { toast.error("اختر الشهر"); return }
+		if (!Number.isInteger(d) || d < 1 || d > 30) { toast.error("اليوم بين 1 و30"); return }
+		setDate.mutate(
+			{ year: y, month: m, day: d },
+			{
+				onSuccess: () => { toast.success("تم ضبط تاريخ اليوم الهجري"); onClose() },
+				onError: (err) => toast.error(getErrorMessage(err, "فشل ضبط التاريخ")),
+			},
+		)
+	}
+
+	return (
+		<Modal open onClose={onClose} title="ضبط تاريخ اليوم الهجري" size="md">
+			<form onSubmit={handleSubmit}>
+				<div className="p-6 space-y-4">
+					<p className="text-xs text-gray-600 leading-relaxed">
+						يتبع الموقع تاريخ موقع مكتب السيد السيستاني تلقائياً. استعمل هذا الضبط فقط في اليوم النادر الذي يختلف فيه الإعلان عن الموقع. يصبح التاريخ المُدخل هو تاريخ <strong>اليوم</strong>، ويستمر العدّ منه.
+					</p>
+					{hijriQuery.isLoading ? (
+						<div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+					) : (
+						<div className="grid grid-cols-3 gap-3">
+							<div>
+								<label className="block text-xs font-medium text-gray-600 mb-1">اليوم</label>
+								<input type="number" min={1} max={30} value={day} onChange={(e) => setDay(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
+							</div>
+							<div>
+								<label className="block text-xs font-medium text-gray-600 mb-1">الشهر</label>
+								<select value={month} onChange={(e) => setMonth(e.target.value)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" required>
+									<option value="" disabled>اختر</option>
+									{HIJRI_MONTHS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
+								</select>
+							</div>
+							<div>
+								<label className="block text-xs font-medium text-gray-600 mb-1">السنة</label>
+								<input type="number" min={1300} max={1700} value={year} onChange={(e) => setYear(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
+							</div>
+						</div>
+					)}
+					<p className="text-[11px] text-gray-500">اليوم 30 يعني أيضاً أن الشهر 30 يوماً.</p>
+				</div>
+				<div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-200 bg-gray-50">
+					<button type="button" onClick={onClose} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-white">إلغاء</button>
+					<button type="submit" disabled={setDate.isPending || hijriQuery.isLoading} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50">
+						{setDate.isPending && <Loader2 className="h-4 w-4 animate-spin" />}حفظ
+					</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
+/**
+ * The calendar list carries one resolved language per hadith; editing needs
+ * every translation, so load the admin record first. Opening the editor on
+ * the list row would silently drop the other languages on save.
+ */
+function HadithEditorLoader({ id, onClose }: { id: string; onClose: () => void }) {
+	const query = useDailyHadith(id)
+	if (query.isError) {
+		return (
+			<Modal open onClose={onClose} title="تعديل الحديث" size="sm">
+				<div className="p-6 text-sm text-red-700">{getErrorMessage(query.error, "تعذّر تحميل الحديث")}</div>
+			</Modal>
+		)
+	}
+	if (!query.data) {
+		return (
+			<Modal open onClose={onClose} title="تعديل الحديث" size="sm">
+				<div className="flex justify-center p-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+			</Modal>
+		)
+	}
+	return <HadithEditor initial={query.data} onClose={onClose} />
 }
 
 function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: () => void }) {
@@ -199,12 +345,12 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 	const updateHadith = useUpdateHadith()
 	const saving = createHadith.isPending || updateHadith.isPending
 
-	const [isActive, setIsActive] = useState(initial?.is_active ?? true)
+	const [hijriMonth, setHijriMonth] = useState(initial?.hijri_month ? String(initial.hijri_month) : "")
+	const [hijriDay, setHijriDay] = useState(initial?.hijri_day ? String(initial.hijri_day) : "")
 	// Languages already stored server-side. PATCH only UPSERTS the translations
 	// in the payload — it never deletes ones left out — so a persisted tab can't
-	// truly be removed from here, and dropping the default would break the
-	// single-default invariant (400). We therefore only allow removing tabs
-	// added in THIS session.
+	// truly be removed from here. We therefore only allow removing tabs added
+	// in THIS session.
 	const persistedLangs = new Set(initial?.daily_hadith_translations.map((t) => t.lang) ?? [])
 	// On create, seed ar/en/fa tabs so the editor sees all expected languages
 	// up-front. Empty tabs are filtered out at submit time.
@@ -215,50 +361,122 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 		const seedLangs = ["ar", "en", "fa"]
 		return seedLangs
 			.filter((code) => languages.some((l) => l.code === code))
-			.map((code, i) => ({ lang: code, content: "", source: null, is_default: i === 0 }))
+			.map((code) => ({ lang: code, content: "", source: null }))
 	}
-	const { translations, activeLang, setActiveLang, updateAt: updateT, addLang, removeAt: removeLang, setDefault } =
+	const { translations, activeLang, setActiveLang, updateAt: updateT, addLang, removeAt: removeLang } =
 		useTranslationsField<DailyHadithTranslation>({
 			initial: seedTranslations(),
 			languages,
-			makeBlank: (lang) => ({ lang, content: "", source: null, is_default: false }),
+			makeBlank: (lang) => ({ lang, content: "", source: null }),
+			requireDefault: false,
 		})
+
+	const monthNum = hijriMonth ? Number(hijriMonth) : null
+	const dayNum = hijriDay ? Number(hijriDay) : null
+	const dayChanged = monthNum !== (initial?.hijri_month ?? null) || dayNum !== (initial?.hijri_day ?? null)
+
+	// Who holds the chosen day right now? Telling the editor before they hit
+	// save beats a bare 409 afterwards.
+	const holderQuery = useHadithCalendar(
+		{ hijri_month: monthNum ?? undefined, hijri_day: dayNum ?? undefined, limit: 1 },
+		{ enabled: !!monthNum && !!dayNum && dayChanged },
+	)
+	const holder = holderQuery.data?.items.find((h) => h.id !== initial?.id)
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault()
+		if ((monthNum === null) !== (dayNum === null)) {
+			toast.error("حدّد الشهر واليوم معاً، أو اتركهما فارغين")
+			return
+		}
 		const cleaned = translations.filter((t) => t.content.trim())
 		if (!cleaned.length) { toast.error("أضف نصاً واحداً على الأقل"); return }
-		if (!cleaned.some((t) => t.is_default)) cleaned[0].is_default = true
-		const body = {
-			is_active: isActive,
-			translations: cleaned.map((t) => ({
-				lang: t.lang,
-				content: t.content,
-				source: t.source || undefined,
-				is_default: t.is_default,
-			})),
-		}
+		const translationsBody = cleaned.map((t) => ({
+			lang: t.lang,
+			content: t.content,
+			source: t.source || undefined,
+		}))
 		const handlers = {
 			onSuccess: () => {
 				toast.success(isEdit ? "تم التحديث" : "تم الإنشاء")
 				onClose()
 			},
-			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل الحفظ")),
+			onError: (err: unknown) => {
+				if (getErrorStatus(err) === 409) {
+					toast.error("هذا اليوم الهجري محجوز لحديث آخر — اختر يوماً آخر أو غيّر يوم الحديث الآخر أولاً.")
+					return
+				}
+				toast.error(getErrorMessage(err, "فشل الحفظ"))
+			},
 		}
-		if (isEdit && initial) updateHadith.mutate({ id: initial.id, body }, handlers)
-		else createHadith.mutate(body, handlers)
+		if (isEdit && initial) {
+			// null/null takes the hadith off the calendar; omitting both would
+			// leave its day alone, so only send the pair when it is being set
+			// or deliberately cleared.
+			updateHadith.mutate(
+				{
+					id: initial.id,
+					body: {
+						...(dayChanged ? { hijri_month: monthNum, hijri_day: dayNum } : {}),
+						translations: translationsBody,
+					},
+				},
+				handlers,
+			)
+		} else {
+			createHadith.mutate(
+				{
+					...(monthNum && dayNum ? { hijri_month: monthNum, hijri_day: dayNum } : {}),
+					translations: translationsBody,
+				},
+				handlers,
+			)
+		}
 	}
 
 	return (
 		<Modal open={true} onClose={onClose} title={isEdit ? "تعديل الحديث" : "حديث جديد"} size="lg">
 			<form onSubmit={handleSubmit}>
 				<div className="p-6 space-y-4">
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-1">اليوم الهجري الذي يُعرض فيه</label>
+						<div className="grid grid-cols-2 gap-3 max-w-md">
+							<select
+								value={hijriMonth}
+								onChange={(e) => { setHijriMonth(e.target.value); if (!e.target.value) setHijriDay("") }}
+								aria-label="الشهر الهجري"
+								className="cursor-pointer px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm bg-white"
+							>
+								<option value="">بلا يوم</option>
+								{HIJRI_MONTHS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
+							</select>
+							<select
+								value={hijriDay}
+								onChange={(e) => setHijriDay(e.target.value)}
+								disabled={!hijriMonth}
+								aria-label="اليوم من الشهر"
+								className="cursor-pointer px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm bg-white disabled:bg-gray-50 disabled:cursor-not-allowed"
+							>
+								<option value="">اليوم</option>
+								{Array.from({ length: 30 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+							</select>
+						</div>
+						<p className="mt-1 text-[11px] text-gray-500">
+							يُعرض الحديث في هذا اليوم من كل عام. الحديث بلا يوم يبقى محفوظاً لكنه لا يظهر على الموقع. إن كان الشهر 29 يوماً فحديث اليوم 30 يُتخطّى في تلك السنة.
+						</p>
+						{holder && (
+							<p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-relaxed">
+								<AlertTriangle className="inline h-3.5 w-3.5 ml-1" />
+								اليوم {formatHijriDay(monthNum, dayNum)} محجوز لحديث آخر: «{holder.content.length > 80 ? `${holder.content.slice(0, 80)}…` : holder.content}». لن يُحفظ هذا الحديث في اليوم نفسه — غيّر يوم الحديث الآخر أولاً.
+							</p>
+						)}
+					</div>
+
 					<div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
 						{translations.map((t, i) => (
 							<button key={i} type="button" onClick={() => setActiveLang(t.lang)}
 								className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeLang === t.lang ? "border-primary text-primary" : "border-transparent text-gray-500"}`}>
 								<Globe className="inline h-4 w-4 ml-1" />{languageLabel(t.lang)}
-								{t.is_default && <span className="mr-1 text-xs text-gray-400">(الافتراضية)</span>}
 								{translations.length > 1 && !persistedLangs.has(t.lang) && (
 									<span onClick={(e) => { e.stopPropagation(); removeLang(i) }} className="mr-2 text-gray-400 hover:text-red-500 cursor-pointer"><Trash2 className="inline h-3 w-3" /></span>
 								)}
@@ -269,17 +487,11 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 
 					{translations.map((t, i) => (
 						<div key={i} className={activeLang === t.lang ? "block space-y-3" : "hidden"}>
-							<div className="flex items-end gap-3">
-								<div className="flex-1">
-									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-									<select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
-										{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-									</select>
-								</div>
-								<label className="flex items-center gap-2 cursor-pointer pb-2">
-									<input type="checkbox" checked={t.is_default} onChange={() => setDefault(i)} className="h-4 w-4 text-primary rounded" />
-									<span className="text-sm">الافتراضية</span>
-								</label>
+							<div>
+								<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
+								<select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+									{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
+								</select>
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">نص الحديث *</label>
@@ -290,7 +502,6 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 									maxLength={4000}
 									dir={t.lang === "ar" ? "rtl" : "ltr"}
 									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm leading-relaxed"
-									required
 								/>
 								<p className="mt-1 text-[11px] text-gray-400">{t.content.length} / 4000 حرف</p>
 							</div>
@@ -307,63 +518,11 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 							</div>
 						</div>
 					))}
-
-					<label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-gray-200">
-						<input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary rounded" />
-						<span className="text-sm">نشط — يدخل في التدوير اليومي</span>
-					</label>
 				</div>
 				<div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-200 bg-gray-50">
 					<button type="button" onClick={onClose} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-white">إلغاء</button>
 					<button type="submit" disabled={saving} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50">
 						{saving && <Loader2 className="h-4 w-4 animate-spin" />}حفظ
-					</button>
-				</div>
-			</form>
-		</Modal>
-	)
-}
-
-function PinDialog({ hadith, onClose }: { hadith: DailyHadith; onClose: () => void }) {
-	const pinHadith = usePinHadith()
-	const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"))
-
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault()
-		pinHadith.mutate(
-			{ pin_date: date, hadith_id: hadith.id },
-			{
-				onSuccess: () => { toast.success("تم التثبيت"); onClose() },
-				onError: (e) => toast.error(getErrorMessage(e, "فشل التثبيت")),
-			},
-		)
-	}
-
-	const preview = hadith.translation?.content ?? hadith.daily_hadith_translations[0]?.content ?? ""
-
-	return (
-		<Modal open={true} onClose={onClose} title="تثبيت الحديث لتاريخ" size="md">
-			<form onSubmit={handleSubmit}>
-				<div className="p-6 space-y-4">
-					<div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-						<p className="text-sm text-gray-700 line-clamp-3 leading-relaxed">{preview}</p>
-					</div>
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-1">التاريخ</label>
-						<input
-							type="date"
-							required
-							value={date}
-							onChange={(e) => setDate(e.target.value)}
-							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm"
-						/>
-						<p className="mt-1 text-[11px] text-gray-500">سيظهر هذا الحديث على الصفحة الرئيسية في التاريخ المحدّد، متجاوزاً التدوير الطبيعي.</p>
-					</div>
-				</div>
-				<div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-200 bg-gray-50">
-					<button type="button" onClick={onClose} className="cursor-pointer px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-white">إلغاء</button>
-					<button type="submit" disabled={pinHadith.isPending} className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50">
-						{pinHadith.isPending && <Loader2 className="h-4 w-4 animate-spin" />}تثبيت
 					</button>
 				</div>
 			</form>

@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import type { ProxyVisit } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorStatus } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
 import { Loader2, Users, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/Skeleton"
@@ -12,6 +12,7 @@ import FilterPills from "@/components/ui/FilterPills"
 import PageHeader from "@/components/layout/PageHeader"
 import Pagination from "@/components/ui/Pagination"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import NotesEditor from "@/components/forms/NotesEditor"
 import {
 	useProxyVisitsList,
 	useUpdateProxyVisit,
@@ -48,9 +49,21 @@ export default function ProxyVisitsPage() {
 
 	const updateVisit = useUpdateProxyVisit()
 	const deleteVisit = useDeleteProxyVisit()
+	const notesMutation = useUpdateProxyVisit()
 	const { confirm, dialog } = useConfirm()
 
-	const updateStatus = (id: string, status: ProxyVisit["status"]) => {
+	const updateStatus = async (id: string, status: ProxyVisit["status"]) => {
+		// COMPLETED sends a real WhatsApp message to the visitor's phone — confirm
+		// before firing it. No such side effect on APPROVED/REJECTED.
+		if (status === "COMPLETED") {
+			const ok = await confirm({
+				title: 'تحديد الطلب كـ "مكتمل"؟',
+				description: "سيُرسل هذا الإجراء رسالة واتساب فعلية إلى رقم هاتف الزائر لإعلامه بإكمال الزيارة. نجاح هذا الطلب لا يضمن وصول الرسالة فعلياً إلى الزائر.",
+				confirmText: "تأكيد",
+				tone: "warning",
+			})
+			if (!ok) return
+		}
 		updateVisit.mutate(
 			{ id, body: { status } },
 			{
@@ -58,8 +71,28 @@ export default function ProxyVisitsPage() {
 					toast.success("تم تحديث الحالة")
 					setSelected(null)
 				},
-				onError: (e) =>
-					toast.error(getErrorMessage(e, "فشل تحديث الحالة")),
+				onError: (e) => {
+					// 409 = another admin changed this request first (the API compares
+					// against the status it last read). Reload instead of overwriting.
+					if (getErrorStatus(e) === 409) {
+						toast.error("عدّل مشرف آخر هذا الطلب قبلك — حُدّثت القائمة، راجع حالته ثم أعد المحاولة.")
+						setSelected(null)
+						listQuery.refetch()
+						return
+					}
+					toast.error(getErrorMessage(e, "فشل تحديث الحالة"))
+				},
+			},
+		)
+	}
+
+	const saveNotes = (id: string, notes: string) => {
+		notesMutation.mutate(
+			{ id, body: { notes } },
+			{
+				onSuccess: () =>
+					setSelected((prev) => (prev && prev.id === id ? { ...prev, notes } : prev)),
+				onError: (e) => toast.error(getErrorMessage(e, "فشل حفظ الملاحظة")),
 			},
 		)
 	}
@@ -121,7 +154,7 @@ export default function ProxyVisitsPage() {
 		<div className="space-y-6">
 			<PageHeader
 				title="طلبات الزيارة بالإنابة"
-				description="طلبات الزيارة الواردة من الموقع — الموافقة والإكمال يُخطران الزائر تلقائياً."
+				description="طلبات الزيارة الواردة من الموقع — تحديد الطلب كَ «مكتمل» فقط يُرسل إشعار واتساب فعلياً إلى الزائر."
 				icon={Users}
 				actions={
 					<Link
@@ -258,6 +291,11 @@ export default function ProxyVisitsPage() {
 								</p>
 							</div>
 						)}
+						<NotesEditor
+							value={selected.notes}
+							onSave={(notes) => saveNotes(selected.id, notes)}
+							saving={notesMutation.isPending}
+						/>
 						<div className="space-y-2 pt-2">
 							{selected.status === "PENDING" && (
 								<>
@@ -285,15 +323,54 @@ export default function ProxyVisitsPage() {
 									</button>
 								</>
 							)}
+							{/* Transitions the API allows: PENDING→APPROVED|REJECTED|COMPLETED,
+							    APPROVED→COMPLETED|REJECTED|PENDING, REJECTED→PENDING|APPROVED.
+							    COMPLETED is final (the visitor has been messaged). Going back
+							    to PENDING clears who/when processed it. */}
 							{selected.status === "APPROVED" && (
-								<button
-									onClick={() =>
-										updateStatus(selected.id, "COMPLETED")
-									}
-									className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-								>
-									تحديد كـ &quot;مكتمل&quot;
-								</button>
+								<>
+									<button
+										onClick={() =>
+											updateStatus(selected.id, "COMPLETED")
+										}
+										className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+									>
+										تحديد كـ &quot;مكتمل&quot;
+									</button>
+									<button
+										onClick={() => updateStatus(selected.id, "REJECTED")}
+										className="w-full px-4 py-2 text-sm text-red-700 border border-red-200 rounded-md hover:bg-red-50"
+									>
+										رفض
+									</button>
+									<button
+										onClick={() => updateStatus(selected.id, "PENDING")}
+										className="w-full px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+									>
+										إعادة إلى قيد الانتظار
+									</button>
+								</>
+							)}
+							{selected.status === "REJECTED" && (
+								<>
+									<button
+										onClick={() => updateStatus(selected.id, "APPROVED")}
+										className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+									>
+										موافقة
+									</button>
+									<button
+										onClick={() => updateStatus(selected.id, "PENDING")}
+										className="w-full px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+									>
+										إعادة إلى قيد الانتظار
+									</button>
+								</>
+							)}
+							{selected.status === "COMPLETED" && (
+								<p className="text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-md p-3">
+									الطلب مكتمل، وقد أُرسل إشعار إلى الزائر — لا يمكن تغيير حالته بعد ذلك.
+								</p>
 							)}
 							<button
 								onClick={() => handleDelete(selected)}

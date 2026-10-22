@@ -1,5 +1,6 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useAuthStore } from "@/store/auth"
 import type { Post } from "@/types"
 import {
@@ -98,11 +99,12 @@ export default function DashboardPage() {
 			icon: Users,
 			href: "/dashboard/proxy-visits",
 		},
-		// Round 14.9: surfaces failed admin-notification emails. Non-zero is an
-		// operational alert (stale SMTP creds / mail-provider outage) — the
-		// submission row was saved fine, just the email didn't go out.
+		// Admin notifications are sent as a digest by a cron that retries every
+		// minute. This counts the ones stuck RIGHT NOW (last send failed): it
+		// returns to zero by itself once mail flows, so non-zero is a live
+		// mail-delivery alert. The submissions themselves are always saved.
 		{
-			label: "إشعارات بريد فاشلة",
+			label: "إشعارات بريد عالقة حالياً",
 			value: stats?.forms.unsent_notifications ?? 0,
 			icon: Mail,
 			href: "/dashboard/contacts",
@@ -113,6 +115,16 @@ export default function DashboardPage() {
 			icon: Newspaper,
 			href: "/dashboard/newsletter",
 		},
+		// Double opt-in: signed up but never clicked the e-mailed link. Absent
+		// on older API deployments, in which case the row is simply omitted.
+		...(stats?.newsletter.pending_subscribers !== undefined
+			? [{
+				label: "اشتراكات بانتظار التأكيد",
+				value: stats.newsletter.pending_subscribers,
+				icon: Newspaper,
+				href: "/dashboard/newsletter",
+			}]
+			: []),
 	]
 
 	const postsBreakdown = stats?.posts
@@ -327,7 +339,7 @@ export default function DashboardPage() {
 							return (
 								<Link
 									key={p.id}
-									href={`/dashboard/posts/${p.id}`}
+									href={editHref.post(p.id)}
 									className="group flex items-center gap-4 px-5 py-3.5 hover:bg-surface-muted transition-colors"
 								>
 									<div className="w-12 h-12 rounded-md bg-surface-muted overflow-hidden shrink-0 ring-1 ring-[hsl(var(--border))]">

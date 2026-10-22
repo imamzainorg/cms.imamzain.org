@@ -24,7 +24,8 @@ import { queryKeys } from "@/lib/queries/keys"
 
 type Service<T> = {
 	trash: (params?: { page?: number; limit?: number }) => Promise<AxiosResponse<PaginatedResponse<T>>>
-	restore: (id: string) => Promise<AxiosResponse<T>>
+	/** The restored body is never read; some resources answer `data: null`. */
+	restore: (id: string) => Promise<AxiosResponse<unknown>>
 }
 
 type Props<T> = {
@@ -44,6 +45,12 @@ type Props<T> = {
 	getSubtitle?: (item: T) => string | null | undefined
 	getThumbnailUrl?: (item: T) => string | null | undefined
 	getCreatedAt?: (item: T) => string | null | undefined
+	/**
+	 * A warning to show instead of the plain success toast when a restore
+	 * succeeded only partly (e.g. a hadith whose Hijri day was taken meanwhile
+	 * comes back without a day). Return null for the normal case.
+	 */
+	getRestoreNotice?: (response: AxiosResponse<unknown>) => string | null
 }
 
 /**
@@ -54,7 +61,7 @@ type Props<T> = {
 export default function TrashList<T>({
 	title, description, singular, icon, backHref, backLabel = "العودة",
 	resource, rootKey, service,
-	getId, getLabel, getSubtitle, getThumbnailUrl, getCreatedAt,
+	getId, getLabel, getSubtitle, getThumbnailUrl, getCreatedAt, getRestoreNotice,
 }: Props<T>) {
 	const router = useRouter()
 	const qc = useQueryClient()
@@ -89,7 +96,11 @@ export default function TrashList<T>({
 		})
 		if (!ok) return
 		restoreMutation.mutate(getId(item), {
-			onSuccess: () => toast.success("تمت الاستعادة"),
+			onSuccess: (response) => {
+				const notice = getRestoreNotice?.(response)
+				if (notice) toast.warning(notice, { duration: 10000 })
+				else toast.success("تمت الاستعادة")
+			},
 			onError: (e) => toast.error(getErrorMessage(e, "تعذّرت الاستعادة — قد يكون الرابط مأخوذاً")),
 		})
 	}

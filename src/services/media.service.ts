@@ -1,6 +1,6 @@
 import axios from "axios"
 import { api } from "@/lib/api"
-import type { MediaRecord, PaginatedResponse } from "@/types"
+import type { MediaRecord, MediaReferences, PaginatedResponse } from "@/types"
 
 /**
  * Shape of the response from POST /media/upload-url.
@@ -11,7 +11,8 @@ import type { MediaRecord, PaginatedResponse } from "@/types"
  *   (`<publicBaseUrl>/<key>`) — usable for optimistic previews.
  * - `maxBytes`: per-MIME upload cap (currently 25 MB for images). Validate
  *   client-side; otherwise R2 will accept the PUT and `/media/confirm`
- *   bounces it with 413.
+ *   bounces it with 413. The presigned URL itself lives 15 minutes and signs
+ *   the Content-Type, so the PUT must send exactly the declared `mime_type`.
  */
 export type UploadUrlResponse = {
 	uploadUrl: string
@@ -80,10 +81,17 @@ export const mediaService = {
 	list: (params?: { page?: number; limit?: number; search?: string; mime_type?: string }) =>
 		api.get<PaginatedResponse<MediaRecord>>("/media", { params }),
 
+	// 10/min/IP and shares the upload pipeline's concurrency gate — never fire
+	// it across a whole library. Answers 200 even when nothing can be made;
+	// `variants_status` + `variants_status_reason` say why.
 	regenerateVariants: (id: string) =>
 		api.post<MediaRecord>(`/media/${id}/regenerate-variants`),
 
 	get: (id: string) => api.get<MediaRecord>(`/media/${id}`),
+
+	// Which records still hold this file (trashed ones included). At most 20
+	// `items`; `total` is the real count.
+	references: (id: string) => api.get<MediaReferences>(`/media/${id}/references`),
 
 	requestUploadUrl: (filename: string, mime_type: string) =>
 		api.post<UploadUrlResponse>("/media/upload-url", { filename, mime_type }),
@@ -110,7 +118,8 @@ export const mediaService = {
 			throw new MediaMimeNotAllowedError(file.type)
 		}
 
-		const { data: urlData } = await mediaService.requestUploadUrl(file.name, file.type)
+		const filename = clampFilename(file.name)
+		const { data: urlData } = await mediaService.requestUploadUrl(filename, file.type)
 
 		// Fail-fast on size before the (potentially slow) PUT. The server
 		// enforces this again at /media/confirm with a 413, so even if the
@@ -133,15 +142,15 @@ export const mediaService = {
 
 		const dimensions = await getImageDimensions(file)
 
-		// As of round 15.4, confirm returns immediately with `variants: []` —
-		// sharp generation is queued on the next event-loop tick. Poll the
-		// detail endpoint until variants land (typically 1–3 s) so the UI
-		// doesn't briefly flash "no variants" + a regenerate prompt.
+		// Confirm returns immediately with `variants: []` and
+		// `variants_status: "processing"`; the Worker generates the WebP sizes in
+		// the background. Poll the detail endpoint until the status settles so the
+		// UI doesn't briefly flash "no variants" + a regenerate prompt.
 		let confirmed: MediaRecord
 		try {
 			const resp = await mediaService.confirmUpload({
 				key: urlData.key,
-				filename: file.name,
+				filename,
 				mime_type: file.type,
 				file_size: file.size,
 				...dimensions,
@@ -162,45 +171,73 @@ export const mediaService = {
 	},
 }
 
+/** Waits between polls (ms) — roughly 11 s in total, with growing gaps to stay gentle on the rate limit. */
+export const VARIANT_POLL_DELAYS_MS = [800, 1000, 1500, 2000, 2500, 3000]
+
 /**
- * Poll `GET /media/:id` every 500 ms (up to ~6 s) until variants populate.
- * Returns the latest record either way — the caller decides whether to
- * surface the "regenerate" button when the array stays empty past timeout.
+ * Poll `GET /media/:id` until `variants_status` leaves "processing".
+ *
+ * The status is the only reliable signal: comparing `variants.length` to a
+ * fixed count (or stopping at the first non-empty array) is wrong — the
+ * pipeline never up-scales, so a 1200 px photo has two variants, and the first
+ * non-empty array can be a half-built set. An animated GIF reads "processing"
+ * for the API's whole 2-minute window, so the poll is capped (~11 s) and the
+ * latest record is returned either way; the media library refreshes by itself
+ * while anything is still processing.
  */
-async function pollForVariants(initial: MediaRecord): Promise<MediaRecord> {
-	if (initial.variants && initial.variants.length > 0) return initial
-	const maxAttempts = 12
+export async function pollForVariants(
+	initial: MediaRecord,
+	delaysMs: number[] = VARIANT_POLL_DELAYS_MS,
+): Promise<MediaRecord> {
+	// No status (older API, or a bare row) → nothing to wait for.
+	if (initial.variants_status !== "processing") return initial
 	let current = initial
-	for (let i = 0; i < maxAttempts; i++) {
-		await new Promise((r) => setTimeout(r, 500))
+	for (const delay of delaysMs) {
+		await new Promise((r) => setTimeout(r, delay))
 		try {
 			const { data } = await mediaService.get(initial.id)
 			current = data
-			if (data.variants && data.variants.length > 0) return data
+			if (data.variants_status !== "processing") return data
 		} catch {
-			// Network blip — keep polling; the user can retry by clicking
-			// the regenerate button if variants never land.
+			// Network blip or a 429 — keep going; the library view re-polls and
+			// the editor can still trigger "regenerate" if it ends up partial.
 		}
 	}
 	return current
 }
 
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+const MAX_FILENAME_LENGTH = 255
+
+/** The API caps `filename` at 255 characters; keep the extension when trimming. */
+function clampFilename(name: string): string {
+	if (name.length <= MAX_FILENAME_LENGTH) return name
+	const dot = name.lastIndexOf(".")
+	const ext = dot > 0 && name.length - dot <= 10 ? name.slice(dot) : ""
+	return name.slice(0, MAX_FILENAME_LENGTH - ext.length) + ext
+}
+
+/**
+ * Client-side dimensions are only a fallback: confirm reads the real,
+ * EXIF-oriented size from the file's header. When the browser can't tell (or
+ * is slow), send NOTHING — the API rejects `width`/`height` below 1, so a
+ * `{0, 0}` placeholder would turn a harmless miss into a 400.
+ */
+function getImageDimensions(file: File): Promise<{ width?: number; height?: number }> {
 	return new Promise((resolve) => {
-		if (typeof window === "undefined") { resolve({ width: 0, height: 0 }); return }
-		const timeoutId = setTimeout(() => resolve({ width: 0, height: 0 }), 500)
+		if (typeof window === "undefined") { resolve({}); return }
+		const timeoutId = setTimeout(() => resolve({}), 500)
 		const img = new Image()
 		const url = URL.createObjectURL(file)
-		img.onload = () => {
+		const settle = (dims: { width?: number; height?: number }) => {
 			clearTimeout(timeoutId)
-			resolve({ width: img.naturalWidth, height: img.naturalHeight })
 			URL.revokeObjectURL(url)
+			resolve(dims)
 		}
-		img.onerror = () => {
-			clearTimeout(timeoutId)
-			resolve({ width: 0, height: 0 })
-			URL.revokeObjectURL(url)
-		}
+		img.onload = () =>
+			settle(img.naturalWidth >= 1 && img.naturalHeight >= 1
+				? { width: img.naturalWidth, height: img.naturalHeight }
+				: {})
+		img.onerror = () => settle({})
 		img.src = url
 	})
 }

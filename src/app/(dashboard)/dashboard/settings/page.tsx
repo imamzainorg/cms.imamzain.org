@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import {
 	Loader2, Settings as SettingsIcon, Save, Plus, Trash2, Lock, Globe,
-	Building2, Phone, Share2, Code, Pencil, AlertCircle,
+	Building2, Phone, Share2, Code, Pencil, AlertCircle, Trophy,
 } from "lucide-react"
 import EmptyState from "@/components/ui/EmptyState"
 import PageHeader from "@/components/layout/PageHeader"
@@ -79,6 +79,22 @@ const GROUPS: GroupDef[] = [
 			{ key: "social_youtube", label: "يوتيوب", kind: "url", type: "string", is_public: true, placeholder: "https://youtube.com/@...", dir: "ltr" },
 			{ key: "social_instagram", label: "إنستغرام", kind: "url", type: "string", is_public: true, placeholder: "https://instagram.com/...", dir: "ltr" },
 			{ key: "social_telegram", label: "تيليغرام", kind: "url", type: "string", is_public: true, placeholder: "https://t.me/...", dir: "ltr" },
+		],
+	},
+	{
+		id: "contest",
+		title: "المسابقة",
+		description: "فتح مسابقة قطوف من الصحيفة السجادية أو إغلاقها دون تدخل المطورين.",
+		icon: Trophy,
+		fields: [
+			{
+				key: "contest_open",
+				label: "المسابقة مفتوحة",
+				hint: "عند الإيقاف يرفض الموقع أي محاولة جديدة (بدء أو إرسال إجابات) برسالة «المسابقة مغلقة»، وتبقى النتائج السابقة معروضة في صفحة المسابقات. فعّله فقط عند انطلاق مسابقة جديدة.",
+				kind: "boolean",
+				type: "boolean",
+				is_public: true,
+			},
 		],
 	},
 	{

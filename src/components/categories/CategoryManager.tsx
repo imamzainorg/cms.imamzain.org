@@ -306,6 +306,7 @@ function CategoryDialog({
 										<input
 											value={t.title}
 											onChange={(e) => updateT(i, { title: e.target.value })}
+											maxLength={500}
 											dir={t.lang === "ar" ? "rtl" : "ltr"}
 											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm"
 											placeholder="اسم التصنيف"
@@ -326,6 +327,7 @@ function CategoryDialog({
 									<input
 										value={t.slug ?? ""}
 										onChange={(e) => updateT(i, { slug: e.target.value })}
+										maxLength={200}
 										dir="ltr"
 										className="mt-1 w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs"
 									/>

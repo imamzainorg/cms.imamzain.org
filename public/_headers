@@ -1,0 +1,18 @@
+# Applied by Cloudflare Workers Static Assets to every file served from out/.
+# This is an admin tool: keep it out of search results and out of frames.
+
+/*
+  X-Robots-Tag: noindex, nofollow
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+# Build output with content hashes in the filenames never changes in place.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Brand marks in /public are stable but not hashed: let them revalidate.
+/brand/*
+  Cache-Control: public, max-age=86400

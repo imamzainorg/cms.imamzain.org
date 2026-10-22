@@ -24,3 +24,18 @@ curate everything on its public website.
   with **React Hook Form** + **Zod**, rich text with **TipTap**.
 - Authenticates against and drives the
   [ImamZain API](https://github.com/imamzainorg/api.imamzain.org) over REST (JWT).
+
+## Hosting
+
+Deployed to **Cloudflare Workers** as a static export (`next build` → `out/`,
+served by Workers Static Assets; see `wrangler.jsonc`). Every API call is made
+by the browser, so the CMS origin must be listed in the API's
+`ALLOWED_ORIGINS`.
+
+```bash
+bun run dev      # local dev server on :3002
+bun run deploy   # build + wrangler deploy
+```
+
+Setup, environment variables, API conventions and deployment details:
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

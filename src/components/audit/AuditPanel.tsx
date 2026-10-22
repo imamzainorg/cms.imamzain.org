@@ -2,6 +2,7 @@
 
 import { useResourceAuditHistory } from "@/lib/queries/audit-logs"
 import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
+import { specialAuditLabel } from "@/lib/audit-vocabulary"
 import { safeFormat } from "@/lib/dates"
 import { Activity, Clock, Loader2 } from "lucide-react"
 
@@ -39,6 +40,7 @@ export default function AuditPanel({ resource_type, resource_id, title = "الن
 				<ul className="space-y-2.5 max-h-96 overflow-y-auto">
 					{items.map((log) => {
 						const action = humanizeAuditAction(log.action)
+						const special = specialAuditLabel(log)
 						const resource = humanizeResource(log.resource_type)
 						const username = log.users?.username || "النظام"
 						const isCron = (log.changes as { by?: string } | null)?.by === "cron"
@@ -48,9 +50,18 @@ export default function AuditPanel({ resource_type, resource_id, title = "الن
 								<div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
 								<div className="flex-1 min-w-0">
 									<p className="text-gray-900">
-										<span className="font-medium">{username}</span>
-										<span className="text-gray-500 mx-1">{action.verb || "نفّذ"}</span>
-										<span className="text-gray-700">{resource}</span>
+										{special ? (
+											<>
+												<span className="font-medium">{special}</span>
+												{log.users && <span className="text-gray-500 mx-1">— {username}</span>}
+											</>
+										) : (
+											<>
+												<span className="font-medium">{username}</span>
+												<span className="text-gray-500 mx-1">{action.verb || "نفّذ"}</span>
+												<span className="text-gray-700">{resource}</span>
+											</>
+										)}
 										{isBulk && <span className="mr-1 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">مجمّع</span>}
 										{isCron && <span className="mr-1 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">مجدول</span>}
 									</p>

@@ -1,6 +1,22 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1"
+declare module "axios" {
+	interface AxiosResponse {
+		/** The envelope's `message`; the interceptor unwraps `data` but keeps this. */
+		message?: string
+		/** The envelope's `meta` (daily-hadith `today` / `restore` carry one). */
+		meta?: Record<string, unknown>
+	}
+}
+
+// NEXT_PUBLIC_API_URL is inlined at build time. Without it, a production build
+// must still talk to the real API (never silently to localhost), while dev
+// and tests fall back to a local server.
+const API_URL =
+	process.env.NEXT_PUBLIC_API_URL ||
+	(process.env.NODE_ENV === "production"
+		? "https://api.imamzain.org/api/v1"
+		: "http://localhost:3000/api/v1")
 
 export const api = axios.create({
 	baseURL: API_URL,
@@ -39,6 +55,17 @@ export function setRefreshToken(token: string | null) {
 let authFailureHandler: (() => void) | null = null
 export function setAuthFailureHandler(h: (() => void) | null) {
 	authFailureHandler = h
+}
+
+/**
+ * Invoked on `403 PASSWORD_CHANGE_REQUIRED`: the account was flagged by an
+ * admin reset and the API (with ENFORCE_PASSWORD_CHANGE_AFTER_RESET=true)
+ * refuses everything except /auth/me, /auth/me/password, logout and refresh.
+ * The app shell sends the user to the change-password screen.
+ */
+let passwordChangeRequiredHandler: (() => void) | null = null
+export function setPasswordChangeRequiredHandler(h: (() => void) | null) {
+	passwordChangeRequiredHandler = h
 }
 
 api.interceptors.request.use((config) => {
@@ -155,6 +182,10 @@ api.interceptors.response.use(
 			"success" in d &&
 			"data" in d
 		) {
+			// Keep the envelope's siblings of `data` reachable (restore/today
+			// answer with `data: null` and put their result in `message`/`meta`).
+			if (typeof d.message === "string") response.message = d.message
+			if (d.meta && typeof d.meta === "object") response.meta = d.meta
 			response.data = d.data
 		}
 		return response
@@ -165,6 +196,14 @@ api.interceptors.response.use(
 			| undefined
 		const url = config?.url ?? ""
 		const isAuthEndpoint = url.includes("/auth/refresh") || url.includes("/auth/login")
+
+		if (
+			error.response?.status === 403 &&
+			(error.response.data as ApiErrorBody | undefined)?.code === "PASSWORD_CHANGE_REQUIRED"
+		) {
+			passwordChangeRequiredHandler?.()
+			return Promise.reject(error)
+		}
 
 		// Only intercept 401s on non-auth endpoints that haven't been retried yet.
 		// Auth-endpoint failures bubble up to the caller (login form, refresh path)
@@ -223,6 +262,42 @@ function serverErrorString(data: ApiErrorBody | undefined): string | null {
 	return null
 }
 
+/** The server's own human-readable error string, if the response carried one. */
+export function getServerErrorText(error: unknown): string | null {
+	if (!axios.isAxiosError(error)) return null
+	return serverErrorString(error.response?.data as ApiErrorBody | undefined)
+}
+
+/** HTTP status of an axios error, if the server answered at all. */
+export function getErrorStatus(error: unknown): number | undefined {
+	return axios.isAxiosError(error) ? error.response?.status : undefined
+}
+
+/** The envelope's stable machine `code` (VALIDATION_FAILED, MEDIA_IN_USE, …). */
+export function getErrorCode(error: unknown): string | undefined {
+	if (!axios.isAxiosError(error)) return undefined
+	return (error.response?.data as ApiErrorBody | undefined)?.code
+}
+
+/**
+ * Seconds from a 429's `Retry-After` header. The API sends it, but browsers
+ * only expose headers the server lists in `Access-Control-Expose-Headers` and
+ * the Worker does not — so cross-origin this is usually `undefined` and callers
+ * must have a wording that works without a number.
+ */
+export function getRetryAfterSeconds(error: unknown): number | undefined {
+	if (!axios.isAxiosError(error)) return undefined
+	const raw = error.response?.headers?.["retry-after"]
+	const n = Number(raw)
+	return Number.isFinite(n) && n > 0 ? Math.ceil(n) : undefined
+}
+
+function waitPhrase(seconds: number | undefined): string {
+	if (!seconds) return "بضع دقائق"
+	if (seconds < 90) return `${seconds} ثانية`
+	return `${Math.ceil(seconds / 60)} دقيقة`
+}
+
 /**
  * Extract a human-readable error message from an axios error.
  * Falls back to the provided default if no specific message is available.
@@ -251,12 +326,13 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 			case "RATE_LIMITED":
 				return "طلبات كثيرة خلال وقت قصير — انتظر قليلاً ثم أعد المحاولة."
 			case "UNAUTHORIZED":
-				// A bare 401 from /auth/login is "wrong credentials", not an
-				// expired session — fall through to the server string there.
-				if (!String(err.config?.url ?? "").includes("/auth/login")) {
-					return "انتهت الجلسة — سجّل الدخول مجددًا."
+				// A 401 from /auth/login is "wrong credentials", not an expired
+				// session. (The API answers the same for a wrong password and an
+				// unknown username, so it cannot be told which.)
+				if (String(err.config?.url ?? "").includes("/auth/login")) {
+					return "اسم المستخدم أو كلمة المرور غير صحيحة."
 				}
-				break
+				return "انتهت الجلسة — سجّل الدخول مجددًا."
 			case "FORBIDDEN":
 				return "ليس لديك صلاحية لتنفيذ هذا الإجراء."
 			case "NOT_FOUND":
@@ -270,6 +346,31 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 				return "حدث خطأ في الخادم — حاول مجددًا لاحقًا."
 			case "AUTH_ACCOUNT_DISABLED":
 				return "تم تعطيل هذا الحساب."
+			case "AUTH_LOGIN_LOCKED":
+				// 5 failed attempts → locked for 1 min, doubling to a 15 min cap.
+				return `تم إيقاف تسجيل الدخول لهذا الحساب مؤقتاً بسبب محاولات فاشلة متكررة. أعد المحاولة بعد ${waitPhrase(getRetryAfterSeconds(err))}.`
+			case "PASSWORD_MUST_DIFFER":
+				return "كلمة المرور الجديدة يجب أن تختلف عن الحالية."
+			case "PASSWORD_CHANGE_REQUIRED":
+				return "يجب تغيير كلمة المرور أولاً قبل متابعة استخدام النظام."
+			case "SLUG_LOCKED_WHILE_PUBLISHED":
+				return "لا يمكن تغيير الرابط المختصر لعنصر منشور — ألغِ نشره أولاً (أو غيّر الرابط مع إلغاء النشر في الحفظ نفسه)."
+			case "SLUG_ALREADY_USED":
+				return serverErrorString(data) ?? "الرابط المختصر مستخدم لتصنيف آخر."
+			case "DUPLICATE_TRANSLATION_LANG":
+				return "تكرّرت لغة واحدة أكثر من مرة في الترجمات — اترك ترجمة واحدة لكل لغة."
+			case "GALLERY_IMAGE_EXISTS":
+				return "هذه الصورة موجودة بالفعل في المعرض."
+			case "GALLERY_IMAGE_IN_TRASH":
+				return "هذه الصورة موجودة في سلة مهملات المعرض — استعدها من هناك بدل إضافتها من جديد."
+			case "AUDIO_SPEAKER_DELETED":
+				return "لا يمكن استعادة التسجيل لأن المتحدث محذوف — استعد المتحدث من سلة المتحدثين أولاً ثم أعد المحاولة."
+			case "MEDIA_IN_USE":
+				return "لا يمكن حذف الملف لأنه ما زال مستخدماً في محتوى آخر."
+			case "FK_CONSTRAINT_VIOLATION":
+				return "عنصر مرتبط لم يعد موجوداً — حدّث الصفحة وأعد المحاولة."
+			case "CONTEST_CLOSED":
+				return "المسابقة مغلقة حالياً."
 			case "VALIDATION_FAILED":
 				// errors[] carries the per-field messages; the top-level `error`
 				// is just a generic "Validation failed".

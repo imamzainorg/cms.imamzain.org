@@ -74,6 +74,7 @@ export const queryKeys = {
 		lists: () => [...queryKeys.media.all, "list"] as const,
 		list: (params: Record<string, unknown>) => [...queryKeys.media.lists(), params] as const,
 		detail: (id: string) => [...queryKeys.media.all, "detail", id] as const,
+		references: (id: string) => [...queryKeys.media.all, "references", id] as const,
 	},
 	gallery: {
 		all: ["gallery"] as const,
@@ -128,14 +129,9 @@ export const queryKeys = {
 			[...queryKeys.dailyHadiths.lists(), params] as const,
 		detail: (id: string) => [...queryKeys.dailyHadiths.all, "detail", id] as const,
 		today: () => [...queryKeys.dailyHadiths.all, "today"] as const,
-		pins: () => [...queryKeys.dailyHadiths.all, "pins"] as const,
-	},
-	campaigns: {
-		all: ["campaigns"] as const,
-		lists: () => [...queryKeys.campaigns.all, "list"] as const,
-		list: (params: Record<string, unknown>) =>
-			[...queryKeys.campaigns.lists(), params] as const,
-		detail: (id: string) => [...queryKeys.campaigns.all, "detail", id] as const,
+		hijriDate: () => [...queryKeys.dailyHadiths.all, "hijri-date"] as const,
+		calendar: (params: Record<string, unknown>) =>
+			[...queryKeys.dailyHadiths.all, "calendar", params] as const,
 	},
 	staticPages: {
 		all: ["static-pages"] as const,

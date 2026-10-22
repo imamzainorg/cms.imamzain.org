@@ -74,11 +74,15 @@ export function makeResourceQueries<
 	const { service, keys, defaultListParams, invalidate = "lists" } = opts
 	const listsKey = invalidate === "all" ? keys.all : keys.lists()
 
-	function useList(params: TListParams = (defaultListParams ?? {}) as TListParams) {
+	function useList(
+		params: TListParams = (defaultListParams ?? {}) as TListParams,
+		options: { enabled?: boolean } = {},
+	) {
 		return useQuery({
 			queryKey: keys.list(params),
 			queryFn: async () => (await service.list(params)).data,
 			placeholderData: keepPreviousData,
+			enabled: options.enabled ?? true,
 		})
 	}
 

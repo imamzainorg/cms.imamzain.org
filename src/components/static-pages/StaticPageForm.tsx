@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import type { StaticPage } from "@/types"
 import { toast } from "sonner"
-import { getErrorMessage } from "@/lib/api"
+import { getErrorMessage, getErrorCode, getErrorStatus, getServerErrorText } from "@/lib/api"
 import { slugify } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
@@ -23,10 +23,6 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const translationSchema = z.object({
 	lang: z.string().min(2),
 	title: z.string().min(1, "العنوان مطلوب").max(300, "العنوان طويل جداً (300 حرف كحد أقصى)"),
-	slug: z.string()
-		.min(1, "الرابط المختصر مطلوب")
-		.max(200, "الرابط المختصر طويل جداً (200 حرف كحد أقصى)")
-		.regex(SLUG_PATTERN, "أحرف لاتينية صغيرة وأرقام وشرطات فقط (مثال: about-imam-zain)"),
 	body: z.string()
 		.min(1, "المحتوى مطلوب")
 		.refine((s) => byteLength(s) <= MAX_BODY_BYTES, {
@@ -39,6 +35,10 @@ const translationSchema = z.object({
 })
 
 const staticPageFormSchema = z.object({
+	slug: z.string()
+		.min(1, "الرابط المختصر مطلوب")
+		.max(200, "الرابط المختصر طويل جداً (200 حرف كحد أقصى)")
+		.regex(SLUG_PATTERN, "أحرف لاتينية صغيرة وأرقام وشرطات فقط (مثال: about-imam-zain)"),
 	display_order: z.number("أدخل رقماً صحيحاً").int("أدخل رقماً صحيحاً").min(0, "الترتيب لا يقل عن صفر"),
 	is_published: z.boolean(),
 	translations: z.array(translationSchema).min(1, "يجب إضافة ترجمة واحدة على الأقل"),
@@ -58,7 +58,6 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 	const blankTranslation = (lang = "ar", is_default = true) => ({
 		lang,
 		title: "",
-		slug: "",
 		body: "",
 		is_default,
 		meta_title: "",
@@ -69,6 +68,7 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 	const buildDefaults = (): StaticPageFormData => {
 		if (!page) {
 			return {
+				slug: "",
 				display_order: 0,
 				is_published: false,
 				translations: [blankTranslation()],
@@ -79,7 +79,6 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 			? raw.map((t) => ({
 				lang: t.lang,
 				title: t.title ?? "",
-				slug: t.slug ?? "",
 				body: t.body ?? "",
 				is_default: t.is_default ?? false,
 				meta_title: t.meta_title ?? "",
@@ -88,13 +87,14 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 			}))
 			: [blankTranslation()]
 		return {
+			slug: page.slug ?? "",
 			display_order: page.display_order ?? 0,
 			is_published: page.is_published,
 			translations,
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, setValue, setError, reset, formState: { errors } } =
 		useForm<StaticPageFormData>({
 			resolver: zodResolver(staticPageFormSchema),
 			defaultValues: buildDefaults(),
@@ -108,17 +108,20 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
 	const translations = watch("translations")
 	const isPublished = watch("is_published")
+	const slugValue = watch("slug")
+	// A live page's slug is its public URL: the API refuses to rename it while
+	// it is (and stays) published. Unticking "published" in the same save unlocks it.
+	const slugLocked = !!page?.is_published && isPublished
 
 	const handleTitleChange = (index: number, value: string) => {
-		const current = translations[index]?.slug
-		if (!current) {
-			setValue(`translations.${index}.slug`, slugify(value))
+		if (translations[index]?.is_default && !slugValue) {
+			setValue("slug", slugify(value))
 		}
 	}
 
-	const regenerateSlug = (index: number) => {
-		const title = translations[index]?.title ?? ""
-		setValue(`translations.${index}.slug`, slugify(title), { shouldValidate: true })
+	const regenerateSlug = () => {
+		const defaultTranslation = translations.find((t) => t.is_default) ?? translations[0]
+		setValue("slug", slugify(defaultTranslation?.title ?? ""), { shouldValidate: true })
 	}
 
 	const addTranslation = () => {
@@ -151,12 +154,12 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 			return
 		}
 		const body = {
+			slug: data.slug,
 			display_order: data.display_order,
 			is_published: data.is_published,
 			translations: data.translations.map((t) => ({
 				...t,
 				body: sanitizeEditorHtml(t.body),
-				slug: t.slug || slugify(t.title),
 				meta_title: t.meta_title || undefined,
 				meta_description: t.meta_description || undefined,
 				og_image_id: t.og_image_id ?? null,
@@ -168,7 +171,16 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 				router.push("/dashboard/static-pages")
 				router.refresh()
 			},
-			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل حفظ الصفحة")),
+			onError: (e: unknown) => {
+				if (getErrorStatus(e) === 409) {
+					const text = getServerErrorText(e) ?? ""
+					if (getErrorCode(e) === "SLUG_LOCKED_WHILE_PUBLISHED" || /slug/i.test(text)) {
+						setError("slug", { type: "server", message: getErrorMessage(e, "الرابط المختصر مستخدم بالفعل") })
+						return
+					}
+				}
+				toast.error(getErrorMessage(e, "فشل حفظ الصفحة"))
+			},
 		}
 		if (page) {
 			updatePage.mutate({ id: page.id, body }, handlers)
@@ -218,24 +230,6 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-lg"
 									/>
 									{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
-								</div>
-
-								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-1">الرابط المختصر (slug) *</label>
-									<div className="flex gap-2">
-										<input {...register(`translations.${index}.slug`)} dir="ltr" placeholder="about-imam-zain"
-											className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs" />
-										<button
-											type="button"
-											onClick={() => regenerateSlug(index)}
-											title="توليد من العنوان"
-											className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] transition-colors"
-										>
-											<Wand2 className="h-3.5 w-3.5" strokeWidth={1.6} />توليد
-										</button>
-									</div>
-									<p className="mt-1 text-xs text-gray-400">أحرف لاتينية صغيرة وأرقام وشرطات فقط. فريد لكل لغة.</p>
-									{errors.translations?.[index]?.slug && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.slug?.message}</p>}
 								</div>
 
 								<div>
@@ -319,6 +313,30 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 							</span>
 							<input type="checkbox" {...register("is_published")} className="h-4 w-4 text-primary rounded" />
 						</label>
+					</div>
+
+					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-2">
+						<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">الرابط المختصر</h3>
+						<div className="flex gap-2">
+							{/* readOnly, not disabled: react-hook-form drops a disabled input's value. */}
+							<input {...register("slug")} dir="ltr" maxLength={200} readOnly={slugLocked} placeholder="about-imam-zain"
+								className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs read-only:bg-gray-50 read-only:text-gray-500 read-only:cursor-not-allowed" />
+							<button
+								type="button"
+								disabled={slugLocked}
+								onClick={regenerateSlug}
+								title="توليد من العنوان"
+								className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-primary border border-[hsl(var(--primary)/0.3)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<Wand2 className="h-3.5 w-3.5" strokeWidth={1.6} />توليد
+							</button>
+						</div>
+						{slugLocked ? (
+							<p className="text-[11px] text-amber-700">الرابط ثابت لأن الصفحة منشورة (رابطها العام قد شاركه الناس). ألغِ النشر أولاً إن كان لا بد من تغييره.</p>
+						) : (
+							<p className="text-[11px] text-gray-500">أحرف لاتينية صغيرة وأرقام وشرطات فقط. رابط واحد للصفحة بجميع لغاتها.</p>
+						)}
+						{errors.slug && <p className="text-sm text-red-600">{errors.slug.message}</p>}
 					</div>
 
 					<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-2">

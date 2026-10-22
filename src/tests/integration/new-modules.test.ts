@@ -23,14 +23,15 @@ function paginated<T>(items: T[]) {
 
 const mockStaticPage = {
 	id: "sp1",
+	slug: "about",
 	display_order: 0,
 	is_published: false,
 	created_at: "2026-01-01T00:00:00Z",
 	updated_at: "2026-01-01T00:00:00Z",
 	static_page_translations: [
-		{ lang: "ar", title: "من نحن", slug: "about", body: "<p>نبذة</p>", is_default: true, meta_title: null, meta_description: null, og_image_id: null },
+		{ lang: "ar", title: "من نحن", body: "<p>نبذة</p>", is_default: true, meta_title: null, meta_description: null, og_image_id: null },
 	],
-	translation: { lang: "ar", title: "من نحن", slug: "about", body: "<p>نبذة</p>", is_default: true, meta_title: null, meta_description: null, og_image_id: null },
+	translation: { lang: "ar", title: "من نحن", body: "<p>نبذة</p>", is_default: true, meta_title: null, meta_description: null, og_image_id: null },
 }
 
 const mockStore = {
@@ -77,7 +78,7 @@ describe("staticPagesService", () => {
 		}))
 		const { data } = await staticPagesService.list({ is_published: false })
 		expect(capturedPublished).toBe("false")
-		expect(data.items[0].static_page_translations[0].slug).toBe("about")
+		expect(data.items[0].slug).toBe("about")
 	})
 
 	it("fetches detail through the ADMIN route (public :id 404s on drafts)", async () => {
@@ -301,7 +302,7 @@ describe("getErrorMessage — stable error-code mapping", () => {
 			HttpResponse.json({ success: false, code: "UNAUTHORIZED", error: "Invalid credentials" }, { status: 401 }),
 		))
 		try { await api.post("/auth/login", { username: "x", password: "y" }) } catch (e) {
-			expect(getErrorMessage(e, "fb")).toBe("Invalid credentials")
+			expect(getErrorMessage(e, "fb")).toBe("اسم المستخدم أو كلمة المرور غير صحيحة.")
 		}
 	})
 

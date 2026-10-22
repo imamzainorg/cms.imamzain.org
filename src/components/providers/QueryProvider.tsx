@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
-import { setAuthFailureHandler } from "@/lib/api"
+import { setAuthFailureHandler, setPasswordChangeRequiredHandler } from "@/lib/api"
+import { useAuthStore } from "@/store/auth"
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
 	const [client] = useState(
@@ -37,6 +38,18 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
 			}
 		})
 		return () => setAuthFailureHandler(null)
+	}, [])
+
+	// The API refuses a flagged account (403 PASSWORD_CHANGE_REQUIRED) on every
+	// route but the change-password ones. Flag it locally; the dashboard shell
+	// reacts by sending the user to the change-password screen.
+	useEffect(() => {
+		setPasswordChangeRequiredHandler(() => {
+			useAuthStore.setState((s) =>
+				s.user ? { user: { ...s.user, must_change_password: true } } : s,
+			)
+		})
+		return () => setPasswordChangeRequiredHandler(null)
 	}, [])
 
 	return (

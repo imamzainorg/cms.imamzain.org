@@ -3,7 +3,6 @@ import type { EmbeddedMedia } from "./media"
 export type StaticPageTranslationItem = {
 	lang: string
 	title: string
-	slug: string
 	body: string
 	is_default: boolean
 	/** SEO override; falls back to `title` server-side if null. */
@@ -18,6 +17,7 @@ export type StaticPageTranslationItem = {
 
 export type StaticPage = {
 	id: string
+	slug: string
 	display_order: number
 	is_published: boolean
 	created_at: string

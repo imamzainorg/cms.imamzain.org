@@ -20,6 +20,13 @@ export default function LoginPage() {
 		setIsLoading(true)
 		try {
 			await login(username, password)
+			if (useAuthStore.getState().user?.must_change_password) {
+				// Set by an admin password reset — the dashboard shell would send
+				// them here anyway; say why instead of a silent redirect.
+				toast.info("عيّن مدير النظام كلمة مرورك — يرجى تغييرها الآن قبل المتابعة.")
+				router.push("/dashboard/profile")
+				return
+			}
 			toast.success("تم تسجيل الدخول بنجاح")
 			router.push("/dashboard")
 		} catch (error: unknown) {

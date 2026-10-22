@@ -22,10 +22,7 @@ export default function StaticPagesTrashPage() {
 			getId={(p) => p.id}
 			getCreatedAt={(p) => p.created_at}
 			getLabel={(p) => p.translation?.title || pickTranslation(p.static_page_translations, p.translation)?.title || "بدون عنوان"}
-			getSubtitle={(p) => {
-				const slug = pickTranslation(p.static_page_translations, p.translation)?.slug
-				return slug ? `/${slug}` : null
-			}}
+			getSubtitle={(p) => (p.slug ? `/${p.slug}` : null)}
 		/>
 	)
 }

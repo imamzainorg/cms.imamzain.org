@@ -1,0 +1,35 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// cms.imamzain.org on Cloudflare Workers. `next build` exports every page to
+	// out/ as static files, served by Workers Static Assets without running any
+	// code: the CMS is a client-rendered app (JWT in localStorage) whose every
+	// API call is made by the BROWSER straight to api.imamzain.org. There is no
+	// Worker script here on purpose. Deploy: `bun run deploy`.
+	"name": "imamzain-cms",
+	"compatibility_date": "2026-09-01",
+	// Every version also gets its own preview URL on workers.dev. The API only
+	// answers browsers whose origin is in its ALLOWED_ORIGINS (CORS), so a
+	// workers.dev copy can load but cannot log in until its origin is listed.
+	"workers_dev": true,
+	"preview_urls": true,
+	"assets": {
+		"directory": "./out",
+		"html_handling": "auto-trailing-slash",
+		// Next's not-found page (out/404.html). Unknown paths are a 404, never a
+		// silent fall-back to another page.
+		"not_found_handling": "404-page"
+	},
+	// Attach the production hostname here (or in the dashboard) once decided.
+	// The EXACT origin then has to be added to ALLOWED_ORIGINS in the API repo's
+	// worker/wrangler.jsonc and the API Worker redeployed, or every call from the
+	// CMS is blocked by CORS. The API's list currently has cms.imamzain.com.
+	// "routes": [{ "pattern": "cms.imamzain.org", "custom_domain": true }],
+	"observability": {
+		"enabled": true
+	}
+	// Not a Service Binding case: bindings are for Worker-to-Worker calls, and
+	// this CMS makes none. If a server-side caller is ever added here, reach the
+	// API through { "services": [{ "binding": "API", "service": "imamzain-api" }] }
+	// and forward the visitor IP in CF-Connecting-IP; never fetch() the public
+	// URL from a Worker in the same zone (it skips the API Worker's route).
+}

@@ -46,7 +46,7 @@ export function useProxyVisitCount(filter: { status?: Status } = {}) {
 export function useUpdateProxyVisit() {
 	const qc = useQueryClient()
 	return useMutation({
-		mutationFn: ({ id, body }: { id: string; body: { status: Status; processed_at?: string } }) =>
+		mutationFn: ({ id, body }: { id: string; body: Partial<{ status: Status; processed_at: string; notes: string }> }) =>
 			proxyVisitsService.update(id, body),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.proxyVisits.all })

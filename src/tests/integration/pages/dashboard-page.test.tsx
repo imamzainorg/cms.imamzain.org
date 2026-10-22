@@ -25,6 +25,7 @@ function seedAuth() {
 			created_at: "2024-01-01",
 			roles: ["admin"],
 			permissions: [],
+			must_change_password: false,
 		},
 		isLoading: false,
 	})

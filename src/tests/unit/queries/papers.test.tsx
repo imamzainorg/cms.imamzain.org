@@ -9,7 +9,9 @@ import {
 	useCreatePaper,
 	useUpdatePaper,
 	useDeletePaper,
+	useTogglePublishPaper,
 } from "@/lib/queries/papers"
+import { queryKeys } from "@/lib/queries/keys"
 import type { AcademicPaper } from "@/types/papers"
 import { buildQueryClient, wrap, paginated } from "../../utils"
 
@@ -20,6 +22,9 @@ const mockPaper: AcademicPaper = {
 	category_id: "c1",
 	published_year: "2024",
 	pdf_url: null,
+	document_languages: ["ar"],
+	views: 0,
+	is_published: true,
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
 	academic_paper_translations: [{
@@ -45,8 +50,8 @@ function wrapped(client: QueryClient) {
 }
 
 describe("usePapersList", () => {
-	it("returns paginated papers", async () => {
-		server.use(http.get(`${API}/academic-papers`, () =>
+	it("fetches papers through the ADMIN route and unwraps the pagination payload", async () => {
+		server.use(http.get(`${API}/academic-papers/admin`, () =>
 			HttpResponse.json(wrap(paginated([mockPaper]))),
 		))
 		const client = buildQueryClient()
@@ -58,14 +63,16 @@ describe("usePapersList", () => {
 
 describe("usePaper", () => {
 	it("guards against undefined id", async () => {
+		let called = false
+		server.use(http.get(`${API}/academic-papers/admin/:id`, () => { called = true; return HttpResponse.json(wrap(mockPaper)) }))
 		const client = buildQueryClient()
-		const { result } = renderHook(() => usePaper(undefined), { wrapper: wrapped(client) })
+		renderHook(() => usePaper(undefined), { wrapper: wrapped(client) })
 		await new Promise((r) => setTimeout(r, 30))
-		expect(result.current.fetchStatus).toBe("idle")
+		expect(called).toBe(false)
 	})
 
-	it("fetches by id", async () => {
-		server.use(http.get(`${API}/academic-papers/ap1`, () => HttpResponse.json(wrap(mockPaper))))
+	it("fetches a single paper by id through the ADMIN route", async () => {
+		server.use(http.get(`${API}/academic-papers/admin/ap1`, () => HttpResponse.json(wrap(mockPaper))))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => usePaper("ap1"), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -77,7 +84,7 @@ describe("paper mutations", () => {
 	it("create/update/delete all invalidate the list", async () => {
 		let listHits = 0
 		server.use(
-			http.get(`${API}/academic-papers`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
+			http.get(`${API}/academic-papers/admin`, () => { listHits++; return HttpResponse.json(wrap(paginated([]))) }),
 			http.post(`${API}/academic-papers`, () => HttpResponse.json(wrap(mockPaper))),
 			http.patch(`${API}/academic-papers/ap1`, () => HttpResponse.json(wrap(mockPaper))),
 			http.delete(`${API}/academic-papers/ap1`, () => HttpResponse.json(wrap({}))),
@@ -105,5 +112,36 @@ describe("paper mutations", () => {
 		const { result: d } = renderHook(() => useDeletePaper(), { wrapper: wrapped(client) })
 		await act(async () => { await d.current.mutateAsync("ap1") })
 		await waitFor(() => expect(listHits).toBeGreaterThan(prev))
+	})
+
+	it("useTogglePublishPaper flips is_published in the cached list optimistically, before the server responds", async () => {
+		let publishBody: unknown
+		// Backend delays its response so we can observe the optimistic state mid-flight.
+		let resolveServer: (() => void) | undefined
+		server.use(
+			http.get(`${API}/academic-papers/admin`, () => HttpResponse.json(wrap(paginated([mockPaper])))),
+			http.patch(`${API}/academic-papers/ap1/publish`, async ({ request }) => {
+				publishBody = await request.json()
+				await new Promise<void>((r) => { resolveServer = r })
+				return HttpResponse.json(wrap({ ...mockPaper, is_published: false }))
+			}),
+		)
+		const client = buildQueryClient()
+		const { result: list } = renderHook(() => usePapersList({ page: 1, limit: 20 }), { wrapper: wrapped(client) })
+		await waitFor(() => expect(list.current.isSuccess).toBe(true))
+		expect(list.current.data?.items[0].is_published).toBe(true)
+
+		const { result: toggle } = renderHook(() => useTogglePublishPaper(), { wrapper: wrapped(client) })
+		act(() => { toggle.current.mutate({ id: "ap1", is_published: false }) })
+
+		const listKey = queryKeys.papers.list({ page: 1, limit: 20 })
+		await waitFor(() => {
+			const cached = client.getQueryData<{ items: AcademicPaper[] }>(listKey)
+			expect(cached?.items[0].is_published).toBe(false)
+		})
+
+		resolveServer?.()
+		await waitFor(() => expect(toggle.current.isSuccess).toBe(true))
+		expect(publishBody).toEqual({ is_published: false })
 	})
 })

@@ -14,9 +14,9 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 describe("booksService", () => {
-	it("list calls GET /books with pagination params", async () => {
+	it("list calls GET /books/admin with pagination params", async () => {
 		let captured: URL | null = null
-		server.use(http.get(`${API}/books`, ({ request }) => {
+		server.use(http.get(`${API}/books/admin`, ({ request }) => {
 			captured = new URL(request.url)
 			return HttpResponse.json(wrap(paginated([])))
 		}))
@@ -27,8 +27,8 @@ describe("booksService", () => {
 		expect(captured!.searchParams.get("category_id")).toBe("c1")
 	})
 
-	it("get returns the unwrapped book", async () => {
-		server.use(http.get(`${API}/books/b1`, () => HttpResponse.json(wrap({ id: "b1" }))))
+	it("get returns the unwrapped book from the ADMIN detail route", async () => {
+		server.use(http.get(`${API}/books/admin/b1`, () => HttpResponse.json(wrap({ id: "b1" }))))
 		const { data } = await booksService.get("b1")
 		expect((data as { id: string }).id).toBe("b1")
 	})
@@ -64,14 +64,20 @@ describe("booksService", () => {
 })
 
 describe("papersService", () => {
-	it("list hits /academic-papers", async () => {
+	it("list hits /academic-papers/admin", async () => {
 		let called = false
-		server.use(http.get(`${API}/academic-papers`, () => {
+		server.use(http.get(`${API}/academic-papers/admin`, () => {
 			called = true
 			return HttpResponse.json(wrap(paginated([])))
 		}))
 		await papersService.list()
 		expect(called).toBe(true)
+	})
+
+	it("get returns the unwrapped paper from the ADMIN detail route", async () => {
+		server.use(http.get(`${API}/academic-papers/admin/ap1`, () => HttpResponse.json(wrap({ id: "ap1" }))))
+		const { data } = await papersService.get("ap1")
+		expect((data as { id: string }).id).toBe("ap1")
 	})
 
 	it("create POSTs to /academic-papers with the cleaned body", async () => {
@@ -86,12 +92,22 @@ describe("papersService", () => {
 		})
 		expect(body).toMatchObject({ category_id: "c1" })
 	})
+
+	it("toggles publish via PATCH /academic-papers/:id/publish", async () => {
+		let body: unknown = null
+		server.use(http.patch(`${API}/academic-papers/ap1/publish`, async ({ request }) => {
+			body = await request.json()
+			return HttpResponse.json(wrap({ id: "ap1", is_published: false }))
+		}))
+		await papersService.togglePublish("ap1", false)
+		expect(body).toEqual({ is_published: false })
+	})
 })
 
 describe("galleryService", () => {
-	it("list hits /gallery", async () => {
+	it("list hits /gallery/admin", async () => {
 		let called = false
-		server.use(http.get(`${API}/gallery`, () => {
+		server.use(http.get(`${API}/gallery/admin`, () => {
 			called = true
 			return HttpResponse.json(wrap(paginated([])))
 		}))

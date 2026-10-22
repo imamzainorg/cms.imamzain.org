@@ -1,12 +1,14 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Book } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit2, Trash2, Eye, BookOpen, Search, FileText } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, EyeOff, BookOpen, Search, FileText, Layers } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
+import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import IconButton from "@/components/ui/IconButton"
 import Pagination from "@/components/ui/Pagination"
@@ -14,7 +16,7 @@ import CategoryFilterSelect from "@/components/ui/CategoryFilterSelect"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { CardGridSkeleton } from "@/components/ui/Skeleton"
-import { useBooksList, useDeleteBook } from "@/lib/queries/books"
+import { useBooksList, useDeleteBook, useTogglePublishBook } from "@/lib/queries/books"
 import { useBookCategoriesList } from "@/lib/queries/book-categories"
 import { useListPage } from "@/lib/use-list-page"
 
@@ -24,19 +26,31 @@ export default function BooksPage() {
 	const { page, setPage, limit, setLimit, search, setSearch, debouncedSearch, resetPageAndSelection } =
 		useListPage({ initialLimit: 24 })
 	const [categoryFilter, setCategoryFilter] = useState("")
+	// «الإصدارات»: the institution's own releases, independent of topic category.
+	const [publicationsOnly, setPublicationsOnly] = useState(false)
 
 	const onCategoryChange = (id: string) => {
 		setCategoryFilter(id)
+		resetPageAndSelection()
+	}
+	const onPublicationsToggle = () => {
+		setPublicationsOnly((v) => !v)
 		resetPageAndSelection()
 	}
 
 	const categoriesQuery = useBookCategoriesList({ limit: 100 })
 	const categories = categoriesQuery.data?.items ?? []
 
+	// /books/admin has no published/draft filter (BookQueryDto declares none) —
+	// it always returns drafts + published together. Reviewing drafts happens
+	// via the per-card badge and publish toggle below, not a list-level filter.
+	// A multi-part series is ONE card here (its volumes live inside it).
 	const booksQuery = useBooksList({
 		page, limit,
 		search: debouncedSearch || undefined,
 		category_id: categoryFilter || undefined,
+		// Exact true/false only: omit (not false) for "no filter".
+		is_publication: publicationsOnly ? true : undefined,
 	})
 	const books = booksQuery.data?.items ?? []
 	const total = booksQuery.data?.pagination.total ?? 0
@@ -44,11 +58,14 @@ export default function BooksPage() {
 	const loading = booksQuery.isLoading
 
 	const deleteBook = useDeleteBook()
+	const togglePublish = useTogglePublishBook()
 
 	const handleDelete = async (b: Book) => {
 		const ok = await confirm({
 			title: "حذف هذا الكتاب؟",
-			description: "سيُنقل الكتاب إلى سلة المهملات. يمكنك استعادته من صفحة المهملات.",
+			description: b.is_published
+				? "الكتاب منشور حالياً وسيختفي من الموقع فوراً. سيُنقل إلى سلة المهملات ويمكن استعادته."
+				: "سيُنقل الكتاب إلى سلة المهملات. يمكنك استعادته من صفحة المهملات.",
 			confirmText: "حذف",
 			tone: "danger",
 		})
@@ -59,13 +76,23 @@ export default function BooksPage() {
 		})
 	}
 
+	const handleTogglePublish = (b: Book) => {
+		togglePublish.mutate(
+			{ id: b.id, is_published: !b.is_published },
+			{
+				onSuccess: () => toast.success(b.is_published ? "تم سحب النشر" : "تم النشر"),
+				onError: (e) => toast.error(getErrorMessage(e, "تعذّر التحديث")),
+			},
+		)
+	}
+
 	const titleOf = (b: Book) =>
 		pickTranslation(b.book_translations, b.translation)?.title || "بدون عنوان"
 
 	const authorOf = (b: Book) =>
 		pickTranslation(b.book_translations, b.translation)?.author || ""
 
-	const hasFilters = !!debouncedSearch || !!categoryFilter
+	const hasFilters = !!debouncedSearch || !!categoryFilter || publicationsOnly
 
 	return (
 		<div className="space-y-6">
@@ -100,6 +127,10 @@ export default function BooksPage() {
 					onChange={onCategoryChange}
 					getName={(c) => categoryName(c.book_category_translations, c.translation)}
 				/>
+				<label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+					<input type="checkbox" checked={publicationsOnly} onChange={onPublicationsToggle} className="h-4 w-4 text-primary rounded cursor-pointer" />
+					إصدارات المؤسسة فقط
+				</label>
 			</div>
 
 			{loading ? (
@@ -122,7 +153,7 @@ export default function BooksPage() {
 						const thumb = book.media?.url || null
 						return (
 							<div key={book.id} className="group cursor-pointer">
-								<button onClick={() => router.push(`/dashboard/books/${book.id}`)} className="cursor-pointer block w-full text-right">
+								<button onClick={() => router.push(editHref.book(book.id))} className="cursor-pointer block w-full text-right">
 									<div className="aspect-2/3 bg-linear-to-br from-secondary/20 to-primary/10 rounded-lg overflow-hidden shadow-md group-hover:shadow-xl transition-all relative">
 										{thumb ? (
 											<img src={thumb} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -139,15 +170,36 @@ export default function BooksPage() {
 												<FileText className="h-2.5 w-2.5" />PDF
 											</div>
 										)}
+										{!book.is_published && (
+											<div className="absolute top-1 right-1">
+												<Badge variant="default" dot>مسودة</Badge>
+											</div>
+										)}
+										{(book.parts_count ?? 0) > 0 && (
+											<div className="absolute top-1 left-1 flex items-center gap-1 text-white text-[10px] bg-secondary/90 px-1.5 py-0.5 rounded-full" title="سلسلة من عدة أجزاء — تُدار أجزاؤها من صفحة تعديل السلسلة">
+												<Layers className="h-2.5 w-2.5" />{book.parts_count} أجزاء
+											</div>
+										)}
 									</div>
 									<div className="mt-2 px-1">
 										<h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-primary">{titleOf(book)}</h3>
 										{authorOf(book) && <p className="text-xs text-gray-500 truncate mt-0.5">{authorOf(book)}</p>}
+										<p className="mt-1 text-[11px] text-gray-400" dir="ltr">
+											{book.document_languages?.length ? book.document_languages.join(" · ").toUpperCase() : "—"}
+										</p>
 									</div>
 								</button>
 								<div className="mt-1.5 px-1 flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
 									<IconButton
-										onClick={() => router.push(`/dashboard/books/${book.id}`)}
+										onClick={() => handleTogglePublish(book)}
+										disabled={togglePublish.isPending}
+										label={book.is_published ? "سحب النشر" : "نشر"}
+										icon={book.is_published
+											? <EyeOff className="h-4 w-4" strokeWidth={1.6} />
+											: <Eye className="h-4 w-4" strokeWidth={1.6} />}
+									/>
+									<IconButton
+										onClick={() => router.push(editHref.book(book.id))}
 										label="تعديل"
 										icon={<Edit2 className="h-4 w-4" strokeWidth={1.6} />}
 									/>

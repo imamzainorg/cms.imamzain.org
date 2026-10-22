@@ -166,6 +166,22 @@ describe("contest hooks", () => {
 		expect(submitted).toBe("true")
 	})
 
+	it("maps the real wire rows (name / final_score / submitted_at) into what the page renders", async () => {
+		// These are the field names the API actually sends; the old docs said full_name/score/is_submitted.
+		server.use(http.get(`${API}/forms/qutuf-sajjadiya-contest/attempts`, () =>
+			HttpResponse.json(wrap(paginated([
+				{ id: "a1", name: "أحمد", phone: "+9647800000000", email: null, started_at: "2026-06-01T10:00:00Z", submitted_at: "2026-06-01T10:20:00Z", ip: "1.2.3.4", user_agent: "ua", final_score: 48 },
+				{ id: "a2", name: null, phone: null, email: "x@y.com", started_at: "2026-06-02T10:00:00Z", submitted_at: null, ip: null, user_agent: null, final_score: null },
+			]))),
+		))
+		const client = buildQueryClient()
+		const { result } = renderHook(() => useContestAttemptsList({ page: 1, limit: 30 }), { wrapper: wrapped(client) })
+		await waitFor(() => expect(result.current.isSuccess).toBe(true))
+		const [done, open] = result.current.data!.items
+		expect(done).toMatchObject({ full_name: "أحمد", score: 48, is_submitted: true, created_at: "2026-06-01T10:00:00Z" })
+		expect(open).toMatchObject({ full_name: "بدون اسم", score: null, is_submitted: false, email: "x@y.com" })
+	})
+
 	it("count returns total only", async () => {
 		server.use(http.get(`${API}/forms/qutuf-sajjadiya-contest/attempts`, () =>
 			HttpResponse.json(wrap(paginated([], { total: 99 }))),

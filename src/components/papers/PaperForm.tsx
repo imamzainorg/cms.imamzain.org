@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useRef, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -8,50 +8,56 @@ import { z } from "zod"
 import type { AcademicPaper } from "@/types"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
-import { categoryName, slugify } from "@/lib/i18n"
+import { categoryName } from "@/lib/i18n"
 import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
-import { byteLength, sanitizeEditorHtml, MAX_BODY_BYTES } from "@/lib/sanitize"
+import { sanitizeEditorHtml } from "@/lib/sanitize"
+import { papersService } from "@/services/papers.service"
 import { useCreatePaper, useUpdatePaper } from "@/lib/queries/papers"
 import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
-import MediaInput from "@/components/ui/MediaInput"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Plus, Trash2, UploadCloud } from "lucide-react"
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+// Server limits (worker/src/features/academic-papers/schemas.ts) — inputs mirror
+// them, counted in UTF-16 code units like an HTML maxlength.
+const TITLE_MAX = 500
+// The abstract is capped at 5000 characters of the STORED string; for the rich
+// editor that is HTML, so markup counts toward it.
+const ABSTRACT_MAX = 5000
+const AUTHOR_MAX = 300
+const KEYWORD_MAX = 200
+const LIST_MAX = 50
+const CODE_MAX = 64
+
+/** "" / unset → undefined, else a number: valueAsNumber would give NaN for an empty box, which zod rejects silently. */
+const optionalNumber = (v: unknown) => (v === "" || v === null || v === undefined ? undefined : Number(v))
 
 const translationSchema = z.object({
 	lang: z.string().min(2),
-	title: z.string().min(1, "العنوان مطلوب"),
+	title: z.string().min(1, "العنوان مطلوب").max(TITLE_MAX, `العنوان أطول من ${TITLE_MAX} حرفاً`),
 	abstract: z.string()
 		.optional()
-		.refine((s) => !s || byteLength(s) <= MAX_BODY_BYTES, {
-			message: `الملخص كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب).`,
+		.refine((s) => !s || s.length <= ABSTRACT_MAX, {
+			message: `الملخص أطول من ${ABSTRACT_MAX} حرف (يُحسب مع تنسيق النص). اختصره أو بسّط التنسيق.`,
 		}),
-	authors: z.array(z.string()),
-	keywords: z.array(z.string()),
-	publication_venue: z.string().optional(),
-	page_count: z.number().optional(),
-	slug: z.string()
-		.max(200, "الرابط المختصر طويل جداً (الحد الأقصى 200)")
-		.refine((s) => !s || SLUG_RE.test(s), {
-			message: "الرابط المختصر: أحرف لاتينية صغيرة وأرقام وشرطات فقط (مثل: fiqh-al-imam)",
-		})
-		.optional(),
-	meta_title: z.string().max(300).optional(),
-	meta_description: z.string().max(500).optional(),
-	og_image_id: z.string().nullable().optional(),
+	authors: z.array(z.string().max(AUTHOR_MAX)).max(LIST_MAX, `الحد الأقصى ${LIST_MAX} مؤلفاً`),
+	keywords: z.array(z.string().max(KEYWORD_MAX)).max(LIST_MAX, `الحد الأقصى ${LIST_MAX} كلمة مفتاحية`),
+	publication_venue: z.string().max(TITLE_MAX, `الحد الأقصى ${TITLE_MAX} حرفاً`).optional(),
+	page_count: z.number().int("عدد صحيح").min(1, "عدد الصفحات 1 أو أكثر").optional(),
 	is_default: z.boolean(),
 })
 
 const paperFormSchema = z.object({
 	category_id: z.string().min(1, "التصنيف مطلوب"),
-	published_year: z.string().optional(),
+	published_year: z.string().max(CODE_MAX, `الحد الأقصى ${CODE_MAX} حرفاً`).optional(),
 	pdf_url: z.string()
+		.max(2000, "الرابط طويل جداً (الحد الأقصى 2000)")
 		.refine((s) => !s || /^https?:\/\/.+/i.test(s), {
 			message: "يجب أن يبدأ الرابط بـ http:// أو https://",
 		})
 		.optional(),
+	document_languages: z.array(z.string()),
+	is_published: z.boolean(),
 	translations: z.array(translationSchema).min(1),
 })
 
@@ -70,6 +76,11 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	const [newAuthor, setNewAuthor] = useState("")
 	const [newKeyword, setNewKeyword] = useState("")
 
+	// Upload state — paper PDF
+	const pdfFileRef = useRef<HTMLInputElement>(null)
+	const [pdfFileName, setPdfFileName] = useState<string | null>(null)
+	const [uploadingPdf, setUploadingPdf] = useState(false)
+
 	type PaperTranslationField = PaperFormData["translations"][number]
 	const blankTranslation = (lang = "ar", is_default = true): PaperTranslationField => ({
 		lang,
@@ -79,10 +90,6 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		keywords: [],
 		publication_venue: "",
 		page_count: undefined,
-		slug: "",
-		meta_title: "",
-		meta_description: "",
-		og_image_id: null,
 		is_default,
 	})
 
@@ -94,6 +101,8 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				category_id: "",
 				published_year: String(new Date().getFullYear()),
 				pdf_url: "",
+				document_languages: [],
+				is_published: true,
 				translations: [blankTranslation()],
 			}
 		}
@@ -110,10 +119,6 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				keywords: t.keywords ?? [],
 				publication_venue: t.publication_venue ?? "",
 				page_count: t.page_count ?? undefined,
-				slug: t.slug ?? "",
-				meta_title: t.meta_title ?? "",
-				meta_description: t.meta_description ?? "",
-				og_image_id: t.og_image_id ?? null,
 				is_default: t.is_default ?? false,
 			}))
 			: [blankTranslation()]
@@ -121,6 +126,8 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 			category_id: paper.category_id ?? "",
 			published_year: paper.published_year ?? "",
 			pdf_url: paper.pdf_url ?? "",
+			document_languages: paper.document_languages ?? [],
+			is_published: paper.is_published,
 			translations,
 		}
 	}
@@ -140,6 +147,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
 	const translations = watch("translations")
+	const documentLanguages = watch("document_languages")
 
 	useEffect(() => {
 		if (categoriesQuery.error) {
@@ -172,7 +180,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 
 	const addAuthor = (index: number) => {
 		if (!newAuthor.trim()) return
-		setValue(`translations.${index}.authors`, [...(translations[index]?.authors || []), newAuthor.trim()])
+		const curr = translations[index]?.authors || []
+		if (curr.length >= LIST_MAX) { toast.error(`الحد الأقصى ${LIST_MAX} مؤلفاً`); return }
+		setValue(`translations.${index}.authors`, [...curr, newAuthor.trim()])
 		setNewAuthor("")
 	}
 	const removeAuthor = (i: number, ai: number) =>
@@ -182,11 +192,35 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		if (!newKeyword.trim()) return
 		const curr = translations[index]?.keywords || []
 		if (curr.includes(newKeyword.trim())) { toast.error("الكلمة المفتاحية موجودة"); return }
+		if (curr.length >= LIST_MAX) { toast.error(`الحد الأقصى ${LIST_MAX} كلمة مفتاحية`); return }
 		setValue(`translations.${index}.keywords`, [...curr, newKeyword.trim()])
 		setNewKeyword("")
 	}
 	const removeKeyword = (i: number, ki: number) =>
 		setValue(`translations.${i}.keywords`, translations[i]?.keywords.filter((_, idx) => idx !== ki))
+
+	const toggleDocumentLanguage = (code: string) => {
+		const current = documentLanguages ?? []
+		setValue(
+			"document_languages",
+			current.includes(code) ? current.filter((c) => c !== code) : [...current, code],
+			{ shouldDirty: true },
+		)
+	}
+
+	const handlePdfFile = async (file: File) => {
+		try {
+			setUploadingPdf(true)
+			const { publicUrl } = await papersService.uploadPdf(file)
+			setValue("pdf_url", publicUrl, { shouldValidate: true })
+			setPdfFileName(file.name)
+			toast.success("تم رفع ملف PDF")
+		} catch (e) {
+			toast.error(getErrorMessage(e, "فشل رفع ملف PDF"))
+		} finally {
+			setUploadingPdf(false)
+		}
+	}
 
 	const onSubmit = async (data: PaperFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
@@ -194,20 +228,20 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 			toast.error("يجب اختيار لغة افتراضية واحدة بالضبط")
 			return
 		}
-		const cleaned = {
-			...data,
-			// PATCH semantics: undefined = leave unchanged, null = clear. Send
-			// null on edit so an editor can remove a wrong PDF link.
+		const body = {
+			category_id: data.category_id,
+			// PATCH semantics: undefined = leave unchanged, null = clear: send null on
+			// edit so an emptied year / a wrong PDF link can actually be removed.
+			published_year: data.published_year || (paper ? null : undefined),
 			pdf_url: data.pdf_url || (paper ? null : undefined),
-			published_year: data.published_year || undefined,
+			// document_languages is NOT NULL on the DB — always send the full
+			// array (never null); [] means "no languages set".
+			document_languages: data.document_languages,
+			is_published: data.is_published,
 			translations: data.translations.map((t) => ({
 				...t,
 				abstract: t.abstract ? sanitizeEditorHtml(t.abstract) : undefined,
 				publication_venue: t.publication_venue || undefined,
-				slug: t.slug || undefined,
-				meta_title: t.meta_title || undefined,
-				meta_description: t.meta_description || undefined,
-				og_image_id: t.og_image_id ?? null,
 			})),
 		}
 		const handlers = {
@@ -219,9 +253,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 			onError: (e: unknown) => toast.error(getErrorMessage(e, "فشل حفظ البحث")),
 		}
 		if (paper) {
-			updatePaper.mutate({ id: paper.id, body: cleaned }, handlers)
+			updatePaper.mutate({ id: paper.id, body }, handlers)
 		} else {
-			createPaper.mutate(cleaned as Parameters<typeof createPaper.mutate>[0], handlers)
+			createPaper.mutate(body as Parameters<typeof createPaper.mutate>[0], handlers)
 		}
 	}
 
@@ -247,12 +281,72 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">سنة النشر</label>
 						<input type="number" {...register("published_year")} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+						{errors.published_year && <p className="mt-1 text-sm text-red-600">{errors.published_year.message}</p>}
+					</div>
+					<div className="flex items-end">
+						<label className="flex items-center gap-2 cursor-pointer">
+							<input type="checkbox" {...register("is_published")} className="h-4 w-4 text-primary rounded" />
+							<span className="text-sm">منشور — يظهر على الموقع</span>
+						</label>
+					</div>
+				</div>
+
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-1">ملف PDF</label>
+						<input
+							ref={pdfFileRef}
+							type="file"
+							accept=".pdf,application/pdf"
+							className="hidden"
+							onChange={(e) => {
+								const f = e.target.files?.[0]
+								if (f) handlePdfFile(f)
+								e.target.value = ""
+							}}
+						/>
+						<div className="flex flex-wrap items-center gap-2 mb-2">
+							<button
+								type="button"
+								onClick={() => pdfFileRef.current?.click()}
+								disabled={uploadingPdf}
+								className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+							>
+								{uploadingPdf
+									? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.6} />
+									: <UploadCloud className="h-3.5 w-3.5" strokeWidth={1.6} />}
+								{uploadingPdf ? "جارٍ الرفع…" : "رفع ملف PDF"}
+							</button>
+							{pdfFileName && !uploadingPdf && (
+								<span className="text-xs text-gray-600 truncate max-w-40" dir="ltr">{pdfFileName}</span>
+							)}
+						</div>
+						<input {...register("pdf_url")} dir="ltr" placeholder="أو ألصق رابط PDF مباشرة" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+						<p className="mt-1 text-xs text-gray-500">يُرفع الملف إلى مخزن الملفات، أو ألصق رابطاً مستضافاً مسبقاً.</p>
+						{errors.pdf_url && <p className="mt-1 text-sm text-red-600">{errors.pdf_url.message}</p>}
 					</div>
 					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-1">رابط ملف PDF</label>
-						<input {...register("pdf_url")} dir="ltr" placeholder="https://example.org/paper.pdf" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
-						<p className="mt-1 text-xs text-gray-500">يُستضاف ملف PDF خارجيًا — ألصق الرابط المباشر.</p>
-						{errors.pdf_url && <p className="mt-1 text-sm text-red-600">{errors.pdf_url.message}</p>}
+						<label className="block text-sm font-medium text-gray-700 mb-1">لغة ملف الـ PDF</label>
+						<div className="flex flex-wrap gap-1.5">
+							{languages.map((l) => {
+								const checked = (documentLanguages ?? []).includes(l.code)
+								return (
+									<button
+										key={l.code}
+										type="button"
+										onClick={() => toggleDocumentLanguage(l.code)}
+										className={`cursor-pointer px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+											checked
+												? "bg-primary text-white border-primary"
+												: "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+										}`}
+									>
+										{languageLabel(l.code, l.native_name)}
+									</button>
+								)
+							})}
+						</div>
+						<p className="mt-1 text-xs text-gray-500">لغة الملف نفسه — قد تختلف عن لغة بيانات البحث في الترجمات أدناه.</p>
 					</div>
 				</div>
 			</div>
@@ -285,25 +379,9 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						</div>
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">العنوان *</label>
-							<input {...register(`translations.${index}.title`)} dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+							<input {...register(`translations.${index}.title`)} maxLength={TITLE_MAX} dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							{errors.translations?.[index]?.title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.title?.message}</p>}
 						</div>
-
-						<details className="text-sm">
-							<summary className="text-gray-500 cursor-pointer hover:text-gray-700 select-none">الرابط المختصر (slug)</summary>
-							<div className="mt-1 flex gap-2">
-								<input {...register(`translations.${index}.slug`)} dir="ltr" placeholder="fiqh-al-imam-sajjad" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary font-mono text-xs" />
-								<button
-									type="button"
-									onClick={() => setValue(`translations.${index}.slug`, slugify(translations[index]?.title || ""), { shouldDirty: true })}
-									className="cursor-pointer px-3 py-2 text-xs border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 whitespace-nowrap"
-								>
-									توليد من العنوان
-								</button>
-							</div>
-							<p className="mt-1 text-xs text-gray-400">اختياري — أحرف لاتينية صغيرة وأرقام وشرطات فقط. يحدّد رابط البحث العام لهذه اللغة؛ اتركه فارغاً ليبقى الوصول عبر المعرّف فقط.</p>
-							{errors.translations?.[index]?.slug && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.slug?.message}</p>}
-						</details>
 
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">الملخص</label>
@@ -320,11 +398,15 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 									/>
 								)}
 							/>
+							<p className={`mt-1 text-[11px] ${(translations[index]?.abstract?.length ?? 0) > ABSTRACT_MAX ? "text-red-600" : "text-gray-400"}`}>
+								{translations[index]?.abstract?.length ?? 0} / {ABSTRACT_MAX} (يشمل رموز التنسيق)
+							</p>
+							{errors.translations?.[index]?.abstract && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.abstract?.message}</p>}
 						</div>
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">المؤلفون</label>
 							<div className="flex gap-2">
-								<input value={newAuthor} onChange={(e) => setNewAuthor(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAuthor(index) } }} placeholder="أضف مؤلفاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input value={newAuthor} maxLength={AUTHOR_MAX} onChange={(e) => setNewAuthor(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAuthor(index) } }} placeholder="أضف مؤلفاً، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 								<button type="button" onClick={() => addAuthor(index)} className="px-3 py-2 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 							</div>
 							<div className="mt-2 flex flex-wrap gap-2">
@@ -338,7 +420,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-1">الكلمات المفتاحية</label>
 							<div className="flex gap-2">
-								<input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(index) } }} placeholder="أضف كلمة مفتاحية، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input value={newKeyword} maxLength={KEYWORD_MAX} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(index) } }} placeholder="أضف كلمة مفتاحية، اضغط Enter" className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 								<button type="button" onClick={() => addKeyword(index)} className="px-3 py-2 bg-gray-100 rounded-md hover:bg-gray-200"><Plus className="h-4 w-4" /></button>
 							</div>
 							<div className="mt-2 flex flex-wrap gap-2">
@@ -352,64 +434,20 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">مكان النشر</label>
-								<input {...register(`translations.${index}.publication_venue`)} placeholder="مجلة / مؤتمر" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input {...register(`translations.${index}.publication_venue`)} maxLength={TITLE_MAX} placeholder="مجلة / مؤتمر" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">عدد الصفحات</label>
-								<input type="number" {...register(`translations.${index}.page_count`, { valueAsNumber: true })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								<input type="number" min={1} {...register(`translations.${index}.page_count`, { setValueAs: optionalNumber })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary" />
+								{errors.translations?.[index]?.page_count && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.page_count?.message}</p>}
 							</div>
 						</div>
-
-						{/* SEO panel — per-translation override of OG/meta tags. */}
-						<details className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-							<summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none px-4 py-3 bg-linear-to-l from-primary/5 to-transparent border-b border-gray-100 flex items-center gap-2">
-								<span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 text-primary rounded-md text-xs font-medium">SEO</span>
-								إعدادات تحسين محركات البحث ({languageLabel(translations[index]?.lang)})
-							</summary>
-							<div className="p-5 space-y-5 bg-white">
-								<div>
-									<label className="block text-sm font-medium text-gray-800 mb-1.5">عنوان SEO (meta title)</label>
-									<input
-										{...register(`translations.${index}.meta_title`)}
-										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
-										placeholder="إن تُرك فارغاً، يُستخدم العنوان الأصلي"
-										className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
-									/>
-									<p className="mt-1.5 text-xs text-gray-600">يظهر في وسم &lt;title&gt; وفي عنوان نتيجة البحث. اتركه فارغاً للاستعمال التلقائي.</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-800 mb-1.5">وصف SEO (meta description)</label>
-									<textarea
-										{...register(`translations.${index}.meta_description`)}
-										rows={3}
-										dir={translations[index]?.lang === "ar" ? "rtl" : "ltr"}
-										placeholder="إن تُرك فارغاً، يُستخدم مقطع من الملخص"
-										className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
-									/>
-									<p className="mt-1.5 text-xs text-gray-600">يظهر تحت العنوان في نتائج البحث. الحد الأمثل 150–160 حرفاً.</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-800 mb-1.5">صورة المشاركة (og:image)</label>
-									<Controller
-										control={control}
-										name={`translations.${index}.og_image_id`}
-										render={({ field: f }) => (
-											<MediaInput
-												value={f.value ?? undefined}
-												onChange={f.onChange}
-											/>
-										)}
-									/>
-									<p className="mt-1.5 text-xs text-gray-600">تظهر عند مشاركة البحث في فيسبوك / تويتر.</p>
-								</div>
-							</div>
-						</details>
 					</>
 				)}
 			/>
 
 			<div className="flex gap-3">
-				<button type="submit" disabled={isSaving} className="cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-semibold rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 disabled:cursor-not-allowed transition-all active:translate-y-px">
+				<button type="submit" disabled={isSaving || uploadingPdf} className="cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-semibold rounded-md shadow-soft hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-raise disabled:opacity-50 disabled:cursor-not-allowed transition-all active:translate-y-px">
 					{isSaving && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} />}
 					{isSaving ? "جارٍ الحفظ..." : paper ? "تحديث البحث" : "إنشاء بحث"}
 				</button>

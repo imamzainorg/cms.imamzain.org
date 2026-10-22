@@ -10,6 +10,7 @@ export type ProxyVisit = {
 	phone: string | null
 	country: string | null
 	status: "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED"
+	notes?: string | null
 	submitted_at?: string
 	created_at?: string
 }

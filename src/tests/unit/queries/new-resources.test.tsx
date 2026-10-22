@@ -12,15 +12,7 @@ import {
 import {
 	useDailyHadithsList,
 	useTodayHadith,
-	usePinHadith,
-	useUnpinHadith,
 } from "@/lib/queries/daily-hadiths"
-import {
-	useCampaignsList,
-	useCreateCampaign,
-	useSendCampaign,
-	useCancelCampaign,
-} from "@/lib/queries/campaigns"
 import { useResourceAuditHistory } from "@/lib/queries/audit-logs"
 import { buildQueryClient, wrap, paginated } from "../../utils"
 
@@ -116,7 +108,7 @@ describe("daily-hadiths hooks", () => {
 		let path = ""
 		server.use(http.get(`${API}/daily-hadiths/today`, ({ request }) => {
 			path = new URL(request.url).pathname
-			return HttpResponse.json(wrap({ id: "h1", content: "...", source: null, lang: "ar", is_pinned: false }))
+			return HttpResponse.json(wrap({ id: "h1", content: "...", source: null, lang: "ar" }))
 		}))
 		const client = buildQueryClient()
 		const { result } = renderHook(() => useTodayHadith(), { wrapper: wrapped(client) })
@@ -124,79 +116,16 @@ describe("daily-hadiths hooks", () => {
 		expect(path.endsWith("/today")).toBe(true)
 	})
 
-	it("useDailyHadithsList paginates", async () => {
-		server.use(http.get(`${API}/daily-hadiths`, () => HttpResponse.json(wrap(paginated([])))))
-		const client = buildQueryClient()
-		const { result } = renderHook(() => useDailyHadithsList(), { wrapper: wrapped(client) })
-		await waitFor(() => expect(result.current.isSuccess).toBe(true))
-	})
-
-	it("pin + unpin POST/DELETE the right endpoints with the right body", async () => {
-		let pinBody: unknown = null
-		let unpinPath = ""
-		server.use(
-			http.post(`${API}/daily-hadiths/pins`, async ({ request }) => {
-				pinBody = await request.json()
-				return HttpResponse.json(wrap({ pin_date: "2026-05-01", hadith_id: "h1", created_at: "2024" }))
-			}),
-			http.delete(`${API}/daily-hadiths/pins/:date`, ({ params }) => {
-				unpinPath = String(params.date)
-				return HttpResponse.json(wrap({}))
-			}),
-		)
-		const client = buildQueryClient()
-		const { result: pin } = renderHook(() => usePinHadith(), { wrapper: wrapped(client) })
-		await act(async () => { await pin.current.mutateAsync({ pin_date: "2026-05-01", hadith_id: "h1" }) })
-		expect(pinBody).toEqual({ pin_date: "2026-05-01", hadith_id: "h1" })
-
-		const { result: unpin } = renderHook(() => useUnpinHadith(), { wrapper: wrapped(client) })
-		await act(async () => { await unpin.current.mutateAsync("2026-05-01") })
-		expect(unpinPath).toBe("2026-05-01")
-	})
-})
-
-describe("campaigns hooks", () => {
-	it("useCampaignsList passes status filter", async () => {
-		let status: string | null = null
-		server.use(http.get(`${API}/newsletter/campaigns`, ({ request }) => {
-			status = new URL(request.url).searchParams.get("status")
+	it("useDailyHadithsList hits the admin route, not the public lookup endpoint", async () => {
+		let path = ""
+		server.use(http.get(`${API}/daily-hadiths/admin`, ({ request }) => {
+			path = new URL(request.url).pathname
 			return HttpResponse.json(wrap(paginated([])))
 		}))
 		const client = buildQueryClient()
-		const { result } = renderHook(() => useCampaignsList({ status: "draft" }), { wrapper: wrapped(client) })
+		const { result } = renderHook(() => useDailyHadithsList(), { wrapper: wrapped(client) })
 		await waitFor(() => expect(result.current.isSuccess).toBe(true))
-		expect(status).toBe("draft")
-	})
-
-	it("create + send + cancel hit the right endpoints", async () => {
-		let createHit = false
-		let sendHit = false
-		let cancelHit = false
-		server.use(
-			http.get(`${API}/newsletter/campaigns`, () => HttpResponse.json(wrap(paginated([])))),
-			http.post(`${API}/newsletter/campaigns`, () => {
-				createHit = true
-				return HttpResponse.json(wrap({ id: "c1", subject: "x", body_html: "x", status: "draft" }))
-			}),
-			http.post(`${API}/newsletter/campaigns/c1/send`, () => {
-				sendHit = true
-				return HttpResponse.json(wrap({ id: "c1", recipient_count: 10 }))
-			}),
-			http.post(`${API}/newsletter/campaigns/c1/cancel`, () => {
-				cancelHit = true
-				return HttpResponse.json(wrap({ id: "c1", status: "cancelled" }))
-			}),
-		)
-		const client = buildQueryClient()
-		const { result: c } = renderHook(() => useCreateCampaign(), { wrapper: wrapped(client) })
-		await act(async () => { await c.current.mutateAsync({ subject: "x", body_html: "x" }) })
-		expect(createHit).toBe(true)
-		const { result: s } = renderHook(() => useSendCampaign(), { wrapper: wrapped(client) })
-		await act(async () => { await s.current.mutateAsync("c1") })
-		expect(sendHit).toBe(true)
-		const { result: cancel } = renderHook(() => useCancelCampaign(), { wrapper: wrapped(client) })
-		await act(async () => { await cancel.current.mutateAsync("c1") })
-		expect(cancelHit).toBe(true)
+		expect(path.endsWith("/daily-hadiths/admin")).toBe(true)
 	})
 })
 

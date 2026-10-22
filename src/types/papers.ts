@@ -8,10 +8,6 @@ export type AcademicPaperTranslationItem = {
 	keywords: string[]
 	publication_venue: string | null
 	page_count: number | null
-	slug?: string | null
-	meta_title?: string | null
-	meta_description?: string | null
-	og_image_id?: string | null
 	is_default: boolean
 }
 
@@ -27,6 +23,10 @@ export type AcademicPaper = {
 	category_id: string
 	published_year: string | null
 	pdf_url: string | null
+	/** ISO 639-1 codes for the language(s) the PDF file itself is in — distinct from translations[].lang. */
+	document_languages: string[]
+	views: number
+	is_published: boolean
 	created_at: string
 	updated_at: string
 	academic_paper_translations: AcademicPaperTranslationItem[]

@@ -8,10 +8,11 @@ export const proxyVisitsService = {
 		status?: "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
 	}) => api.get<PaginatedResponse<ProxyVisit>>("/forms/proxy-visits", { params }),
 
-	update: (id: string, body: {
+	update: (id: string, body: Partial<{
 		status: "PENDING" | "APPROVED" | "COMPLETED" | "REJECTED"
-		processed_at?: string
-	}) => api.patch<ProxyVisit>(`/forms/proxy-visits/${id}`, body),
+		processed_at: string
+		notes: string
+	}>) => api.patch<ProxyVisit>(`/forms/proxy-visits/${id}`, body),
 
 	remove: (id: string) => api.delete(`/forms/proxy-visits/${id}`),
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Audio } from "@/types"
@@ -179,7 +180,7 @@ export default function AudiosPage() {
 									<tr key={a.id} className="hover:bg-gray-50">
 										<td className="px-6 py-4">
 											<button
-												onClick={() => router.push(`/dashboard/audios/${a.id}`)}
+												onClick={() => router.push(editHref.audio(a.id))}
 												className="cursor-pointer flex items-center gap-3 text-right min-w-0"
 											>
 												<div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
@@ -213,7 +214,7 @@ export default function AudiosPage() {
 														: <Eye className="h-4 w-4" strokeWidth={1.6} />}
 												/>
 												<IconButton
-													onClick={() => router.push(`/dashboard/audios/${a.id}`)}
+													onClick={() => router.push(editHref.audio(a.id))}
 													label="تعديل"
 													icon={<Edit2 className="h-4 w-4" strokeWidth={1.6} />}
 												/>

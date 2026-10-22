@@ -77,7 +77,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "المكتبة",
 				href: "/dashboard/books",
 				icon: BookOpen,
-				permissions: ["books:create", "books:update", "books:delete"],
+				permissions: ["books:read", "books:create", "books:update", "books:delete"],
 				children: [
 					{ name: "كل الكتب", href: "/dashboard/books", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/book-categories", icon: FolderTree },
@@ -88,7 +88,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "الأبحاث",
 				href: "/dashboard/papers",
 				icon: GraduationCap,
-				permissions: ["academic-papers:create", "academic-papers:update", "academic-papers:delete"],
+				permissions: ["academic-papers:read", "academic-papers:create", "academic-papers:update", "academic-papers:delete"],
 				children: [
 					{ name: "كل الأبحاث", href: "/dashboard/papers", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/paper-categories", icon: FolderTree },
@@ -99,7 +99,7 @@ const groups: { title: string; items: Item[] }[] = [
 				name: "معرض الصور",
 				href: "/dashboard/gallery",
 				icon: ImageIcon,
-				permissions: ["gallery:create", "gallery:update", "gallery:delete"],
+				permissions: ["gallery:read", "gallery:create", "gallery:update", "gallery:delete"],
 				children: [
 					{ name: "كل الصور", href: "/dashboard/gallery", icon: List },
 					{ name: "التصنيفات", href: "/dashboard/gallery-categories", icon: FolderTree },
@@ -160,13 +160,7 @@ const groups: { title: string; items: Item[] }[] = [
 		items: [
 			{ name: "رسائل التواصل", href: "/dashboard/contacts", icon: Mail, permissions: ["forms:read"] },
 			{ name: "طلبات الزيارة", href: "/dashboard/proxy-visits", icon: Users, permissions: ["forms:read"] },
-			{
-				name: "النشرة البريدية",
-				href: "/dashboard/newsletter",
-				icon: Newspaper,
-				permissions: ["newsletter:read"],
-				children: [{ name: "الحملات", href: "/dashboard/campaigns" }],
-			},
+			{ name: "النشرة البريدية", href: "/dashboard/newsletter", icon: Newspaper, permissions: ["newsletter:read"] },
 			{ name: "المسابقات", href: "/dashboard/contest", icon: Trophy, permissions: ["contest:read"] },
 		],
 	},

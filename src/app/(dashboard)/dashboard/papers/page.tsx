@@ -1,20 +1,23 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { AcademicPaper } from "@/types"
 import { categoryName, pickTranslation } from "@/lib/i18n"
-import { Plus, Edit, Trash2, GraduationCap, ExternalLink, Search, Calendar, Tag, FileText } from "lucide-react"
+import { Plus, Edit, Trash2, GraduationCap, ExternalLink, Search, Calendar, Tag, FileText, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import { safeFormat } from "@/lib/dates"
+import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
+import IconButton from "@/components/ui/IconButton"
 import Pagination from "@/components/ui/Pagination"
 import CategoryFilterSelect from "@/components/ui/CategoryFilterSelect"
 import PageHeader from "@/components/layout/PageHeader"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { ListSkeleton } from "@/components/ui/Skeleton"
-import { usePapersList, useDeletePaper } from "@/lib/queries/papers"
+import { usePapersList, useDeletePaper, useTogglePublishPaper } from "@/lib/queries/papers"
 import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
 import { useListPage } from "@/lib/use-list-page"
 
@@ -33,6 +36,10 @@ export default function PapersPage() {
 	const categoriesQuery = usePaperCategoriesList({ limit: 100 })
 	const categories = categoriesQuery.data?.items ?? []
 
+	// No is_published filter here — unlike static-pages/audios, the API's
+	// AcademicPaperQueryDto has no such query param (forbidNonWhitelisted
+	// 400s on it). The admin route already returns drafts; each row shows
+	// its own status via the badge + publish/unpublish action below.
 	const papersQuery = usePapersList({
 		page, limit,
 		search: debouncedSearch || undefined,
@@ -44,6 +51,7 @@ export default function PapersPage() {
 	const loading = papersQuery.isLoading
 
 	const deletePaper = useDeletePaper()
+	const togglePublish = useTogglePublishPaper()
 
 	const handleDelete = async (id: string) => {
 		const ok = await confirm({
@@ -57,6 +65,16 @@ export default function PapersPage() {
 			onSuccess: () => toast.success("تم الحذف"),
 			onError: (e) => toast.error(getErrorMessage(e, "فشل الحذف")),
 		})
+	}
+
+	const handleTogglePublish = (p: AcademicPaper) => {
+		togglePublish.mutate(
+			{ id: p.id, is_published: !p.is_published },
+			{
+				onSuccess: () => toast.success(p.is_published ? "تم سحب النشر" : "تم النشر"),
+				onError: (e) => toast.error(getErrorMessage(e, "تعذّر التحديث")),
+			},
+		)
 	}
 
 	const titleOf = (p: AcademicPaper) =>
@@ -126,19 +144,26 @@ export default function PapersPage() {
 							? categoryName(p.academic_paper_categories.academic_paper_category_translations, p.academic_paper_categories.translation)
 							: ""
 						return (
-							<div key={p.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer" onClick={() => router.push(`/dashboard/papers/${p.id}`)}>
+							<div key={p.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer" onClick={() => router.push(editHref.paper(p.id))}>
 								<div className="flex items-start gap-4">
 									<div className="hidden sm:flex w-14 h-14 rounded-lg bg-secondary/15 text-secondary items-center justify-center shrink-0">
 										<GraduationCap className="h-7 w-7" />
 									</div>
 									<div className="flex-1 min-w-0">
-										<h3 className="text-lg font-semibold text-gray-900 hover:text-primary mb-1 line-clamp-2">{titleOf(p)}</h3>
+										<div className="flex items-center gap-2 mb-1">
+											<h3 className="text-lg font-semibold text-gray-900 hover:text-primary line-clamp-2">{titleOf(p)}</h3>
+											{!p.is_published && <Badge variant="default" dot>مسودة</Badge>}
+										</div>
 										{authors.length > 0 && (
 											<p className="text-sm text-gray-600 mb-2">{authors.join("، ")}</p>
 										)}
 										<div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-2">
 											{p.published_year && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{p.published_year}</span>}
 											<span className="flex items-center gap-1"><Tag className="h-3 w-3" />{cat || "بدون تصنيف"}</span>
+											<span className="flex items-center gap-1"><Eye className="h-3 w-3" />{p.views ?? 0}</span>
+											{p.document_languages?.length > 0 && (
+												<span dir="ltr">{p.document_languages.join(" · ").toUpperCase()}</span>
+											)}
 											{p.pdf_url && (
 												<a href={p.pdf_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="cursor-pointer text-primary hover:underline flex items-center gap-1">
 													<FileText className="h-3 w-3" />ملف PDF<ExternalLink className="h-2.5 w-2.5" />
@@ -157,7 +182,15 @@ export default function PapersPage() {
 									<div className="flex flex-col items-end gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
 										<span className="text-[11px] text-gray-400">{safeFormat(p.created_at, "dd/MM/yyyy", "")}</span>
 										<div className="flex gap-1">
-											<button onClick={() => router.push(`/dashboard/papers/${p.id}`)} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Edit className="h-4 w-4" /></button>
+											<IconButton
+												onClick={() => handleTogglePublish(p)}
+												disabled={togglePublish.isPending}
+												label={p.is_published ? "سحب النشر" : "نشر"}
+												icon={p.is_published
+													? <EyeOff className="h-4 w-4" strokeWidth={1.6} />
+													: <Eye className="h-4 w-4" strokeWidth={1.6} />}
+											/>
+											<button onClick={() => router.push(editHref.paper(p.id))} className="cursor-pointer p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded" title="تعديل"><Edit className="h-4 w-4" /></button>
 											<button onClick={() => handleDelete(p.id)} className="cursor-pointer p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="حذف"><Trash2 className="h-4 w-4" /></button>
 										</div>
 									</div>

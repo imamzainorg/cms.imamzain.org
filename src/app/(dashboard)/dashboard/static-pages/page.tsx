@@ -1,5 +1,6 @@
 "use client"
 
+import { editHref } from "@/lib/routes"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -178,7 +179,7 @@ export default function StaticPagesPage() {
 									>
 										<td className="px-4 py-3 align-middle">
 											<Link
-												href={`/dashboard/static-pages/${p.id}`}
+												href={editHref.staticPage(p.id)}
 												className="cursor-pointer text-right hover:text-primary transition-colors"
 											>
 												<span className="text-[13px] font-medium text-foreground line-clamp-1">
@@ -188,7 +189,7 @@ export default function StaticPagesPage() {
 										</td>
 										<td className="px-4 py-3 align-middle">
 											<span dir="ltr" className="font-mono text-xs text-[hsl(var(--foreground-muted))]">
-												{t?.slug ? `/${t.slug}` : "—"}
+												{p.slug ? `/${p.slug}` : "—"}
 											</span>
 										</td>
 										<td className="px-4 py-3 align-middle text-[12.5px] text-[hsl(var(--foreground-muted))] arabic-nums tabular-nums">
@@ -212,7 +213,7 @@ export default function StaticPagesPage() {
 													<Eye className="h-3.5 w-3.5" strokeWidth={1.6} />
 												</button>
 												<button
-													onClick={() => router.push(`/dashboard/static-pages/${p.id}`)}
+													onClick={() => router.push(editHref.staticPage(p.id))}
 													className="cursor-pointer text-[hsl(var(--foreground-muted))] hover:text-primary transition-colors"
 													title="تعديل"
 												>

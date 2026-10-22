@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/api"
 import Pagination from "@/components/ui/Pagination"
@@ -13,7 +14,9 @@ import { safeFormat } from "@/lib/dates"
 import {
 	useContestAttemptsList,
 	useContestAttemptsCount,
+	useContestOpen,
 } from "@/lib/queries/contest"
+import { useHasPermission } from "@/lib/permissions"
 import { useListPage } from "@/lib/use-list-page"
 
 type SortKey = "rank" | "name" | "date"
@@ -34,6 +37,9 @@ export default function ContestPage() {
 		setFilter(f)
 		resetPageAndSelection()
 	}
+
+	const contestOpen = useContestOpen()
+	const canEditSettings = useHasPermission("settings:update")
 
 	const allCount = useContestAttemptsCount({})
 	const submittedCount = useContestAttemptsCount({ submitted: "true" })
@@ -57,7 +63,8 @@ export default function ContestPage() {
 	const filtered = attempts.filter((a) =>
 		!search ||
 		a.full_name.toLowerCase().includes(search.toLowerCase()) ||
-		(a.phone && a.phone.includes(search))
+		(a.phone && a.phone.includes(search)) ||
+		(a.email && a.email.toLowerCase().includes(search.toLowerCase()))
 	)
 
 	const submittedScores = filtered.filter((a) => a.is_submitted).map((a) => a.score ?? 0)
@@ -118,6 +125,28 @@ export default function ContestPage() {
 				description="ترتيب المتسابقين حسب الدرجة. الأعلى يظهر أوّلاً."
 				icon={Trophy}
 			/>
+
+			{contestOpen.data !== undefined && (
+				<div
+					role="status"
+					className={`rounded-xl border px-5 py-3 text-sm flex flex-wrap items-center justify-between gap-2 ${
+						contestOpen.data
+							? "bg-green-50 border-green-200 text-green-900"
+							: "bg-amber-50 border-amber-200 text-amber-900"
+					}`}
+				>
+					<span>
+						{contestOpen.data
+							? "المسابقة مفتوحة حالياً: تُقبل محاولات جديدة من الموقع."
+							: "المسابقة مغلقة حالياً: لا تُقبل محاولات جديدة (يرد الموقع بـ «المسابقة مغلقة»)، وتبقى النتائج السابقة معروضة هنا."}
+					</span>
+					{canEditSettings && (
+						<Link href="/dashboard/settings" className="text-xs font-medium underline underline-offset-2">
+							{contestOpen.data ? "إغلاق المسابقة" : "فتح مسابقة جديدة"} من الإعدادات
+						</Link>
+					)}
+				</div>
+			)}
 
 			<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 				{[
@@ -211,7 +240,7 @@ export default function ContestPage() {
 										<td className="px-4 py-3">
 											<span className="text-sm font-medium text-gray-900">{a.full_name}</span>
 										</td>
-										<td className="px-4 py-3 text-sm text-gray-500" dir="ltr">{a.phone || "—"}</td>
+										<td className="px-4 py-3 text-sm text-gray-500" dir="ltr">{a.phone || a.email || "—"}</td>
 										<td className="px-4 py-3">
 											{a.is_submitted ? (
 												<span className={`inline-flex items-center gap-1 px-2.5 py-1 text-sm font-bold rounded-md ${isWinner ? "bg-amber-100 text-amber-800" : "bg-primary/10 text-primary"}`}>

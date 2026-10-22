@@ -14,11 +14,21 @@ type ListParams = {
 	mime_type?: string
 }
 
+/** How often the library re-reads itself while some image is still getting its variants. */
+export const MEDIA_PROCESSING_REFETCH_MS = 4000
+
 export function useMediaList(params: ListParams) {
 	return useQuery({
 		queryKey: queryKeys.media.list(params),
 		queryFn: async () => (await mediaService.list(params)).data,
 		placeholderData: keepPreviousData,
+		// A fresh upload shows "processing" for a few seconds (up to 2 minutes
+		// for an animated GIF). Re-read until nothing on the page is, so tiles
+		// flip to ready by themselves instead of needing a manual refresh.
+		refetchInterval: (query) =>
+			query.state.data?.items.some((m) => m.variants_status === "processing")
+				? MEDIA_PROCESSING_REFETCH_MS
+				: false,
 	})
 }
 
@@ -27,6 +37,15 @@ export function useMedia(id: string | undefined) {
 		queryKey: queryKeys.media.detail(id ?? ""),
 		queryFn: async () => (await mediaService.get(id!)).data,
 		enabled: !!id,
+	})
+}
+
+/** Where a file is still used. Loaded on demand (`enabled`) — it is a panel, not page data. */
+export function useMediaReferences(id: string | undefined, enabled: boolean) {
+	return useQuery({
+		queryKey: queryKeys.media.references(id ?? ""),
+		queryFn: async () => (await mediaService.references(id!)).data,
+		enabled: !!id && enabled,
 	})
 }
 
@@ -63,8 +82,10 @@ export function useDeleteMedia() {
 }
 
 /**
- * Regenerate the WebP variants (320/768/1280/1920) for a media item. Useful when
- * the original sharp pipeline failed mid-upload (variants[] came back empty).
+ * Regenerate the WebP variants (320/768/1280/1920) for a media item. Offer it
+ * only when `variants_status === "partial"` — for `unavailable` and
+ * `not_applicable` there is nothing it can make. It also strips EXIF/GPS from
+ * the stored original, and is rate-limited to 10/min.
  */
 export function useRegenerateVariants() {
 	const qc = useQueryClient()

@@ -5,6 +5,9 @@ export type GalleryImageTranslationItem = {
 	lang: string
 	title: string
 	description: string | null
+	meta_title?: string | null
+	meta_description?: string | null
+	og_image_id?: string | null
 }
 
 export type GalleryMedia = {
@@ -31,6 +34,8 @@ export type GalleryImage = {
 	author: string | null
 	tags: string[]
 	locations: string[]
+	is_published: boolean
+	views: number
 	created_at: string
 	updated_at: string
 	media: GalleryMedia

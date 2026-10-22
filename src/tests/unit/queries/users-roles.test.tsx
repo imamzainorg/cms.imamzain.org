@@ -72,7 +72,7 @@ describe("users hooks", () => {
 		prev = hits
 
 		const { result: u } = renderHook(() => useUpdateUser(), { wrapper: wrapped(client) })
-		await act(async () => { await u.current.mutateAsync({ id: "u1", body: { is_active: false } }) })
+		await act(async () => { await u.current.mutateAsync({ id: "u1", body: { username: "renamed" } }) })
 		await waitFor(() => expect(hits).toBeGreaterThan(prev))
 		prev = hits
 

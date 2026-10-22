@@ -10,7 +10,7 @@ export default function NewsletterTrashPage() {
 	return (
 		<TrashList<Subscriber>
 			title="سلة المهملات — مشتركو النشرة"
-			description="المشتركون المحذوفون. الاستعادة تُعيد المشترك وتفعّله من جديد."
+			description="المشتركون المحذوفون. من كان مشتركاً فعلياً حين حُذف يعود نشطاً بالاستعادة؛ أما من كان قد ألغى اشتراكه فيعود غير نشط، ومن لم يؤكد اشتراكه بعد يبقى بانتظار التأكيد."
 			singular="المشترك"
 			icon={Trash2}
 			backHref="/dashboard/newsletter"

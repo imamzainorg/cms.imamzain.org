@@ -1,16 +1,18 @@
 "use client"
 
-import { use } from "react"
 import { usePost } from "@/lib/queries/posts"
 import PostForm from "@/components/posts/PostForm"
 import AuditPanel from "@/components/audit/AuditPanel"
-import { Loader2 } from "lucide-react"
+import EditRoute, { EditRouteSpinner } from "@/components/layout/EditRoute"
 
-export default function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
-	const { id } = use(params)
+export default function EditPostPage() {
+	return <EditRoute>{(id) => <EditPost id={id} />}</EditRoute>
+}
+
+function EditPost({ id }: { id: string }) {
 	const { data: post, isLoading } = usePost(id)
 
-	if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+	if (isLoading) return <EditRouteSpinner />
 	if (!post) return <p className="text-gray-500">لم يتم العثور على المقالة.</p>
 
 	return (

@@ -11,8 +11,8 @@ type Props<T extends string> = {
 	onChange: (value: T) => void
 	/**
 	 * Default "tabs" variant uses an outer card with a colored active state
-	 * suitable for primary filters (posts status, proxy-visits status,
-	 * campaign status). "segmented" uses a tighter inline pill group used by
+	 * suitable for primary filters (posts status, proxy-visits status).
+	 * "segmented" uses a tighter inline pill group used by
 	 * newsletter and contest where the pills sit alongside other controls.
 	 */
 	variant?: "tabs" | "segmented"
@@ -22,7 +22,7 @@ type Props<T extends string> = {
 /**
  * Standard horizontal pill-group filter — used by every list page that
  * exposes a discrete status selector (posts draft/scheduled/published,
- * campaigns 7-state, newsletter all/active/inactive, proxy-visits, contest).
+ * newsletter all/active/inactive, proxy-visits, contest).
  */
 export default function FilterPills<T extends string>({
 	value,

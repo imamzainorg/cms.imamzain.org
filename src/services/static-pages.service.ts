@@ -4,7 +4,6 @@ import type { PaginatedResponse, StaticPage } from "@/types"
 type TranslationInput = {
 	lang: string
 	title: string
-	slug: string
 	body: string
 	is_default?: boolean
 	meta_title?: string
@@ -21,6 +20,7 @@ export const staticPagesService = {
 	get: (id: string) => api.get<StaticPage>(`/static-pages/admin/${id}`),
 
 	create: (body: {
+		slug: string
 		translations: TranslationInput[]
 		display_order?: number
 		is_published?: boolean
@@ -28,6 +28,7 @@ export const staticPagesService = {
 
 	/** Translations are upserted by (page_id, lang) — omitted langs are left untouched. */
 	update: (id: string, body: Partial<{
+		slug: string
 		translations: TranslationInput[]
 		display_order: number
 		is_published: boolean

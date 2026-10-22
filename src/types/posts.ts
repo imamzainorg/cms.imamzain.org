@@ -7,7 +7,6 @@ export type PostTranslationItem = {
 	summary: string | null
 	/** Present on detail responses only — list responses drop `body` for payload size (round 15.2). */
 	body?: string
-	slug: string
 	is_default: boolean
 	/** SEO override; falls back to `title` server-side if null. */
 	meta_title?: string | null
@@ -36,6 +35,7 @@ export type Post = {
 	id: string
 	category_id: string
 	cover_image_id: string | null
+	slug: string
 	is_published: boolean
 	is_featured: boolean
 	published_at: string | null

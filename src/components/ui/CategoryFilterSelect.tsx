@@ -1,5 +1,6 @@
-import Select from "@/components/ui/Select"
 "use client"
+
+import Select from "@/components/ui/Select"
 
 type Props<T> = {
 	categories: T[]

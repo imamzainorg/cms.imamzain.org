@@ -120,7 +120,7 @@ export default function ProxyVisitsPage() {
 	}
 	const shared = { search: debouncedSearch || undefined, country: country || undefined, from: fromIso, to: toIso }
 
-	const listQuery = useProxyVisitsList({ ...shared, status: tab || undefined, order, page, limit })
+	const listQuery = useProxyVisitsList({ ...shared, status: tab || undefined, order: order === "asc" ? "asc" : undefined, page, limit })
 	const rawVisits = listQuery.data?.items ?? []
 	// keepPreviousData would otherwise leak the previous tab's rows in for a moment.
 	const visits = tab ? rawVisits.filter((v) => v.status === tab) : rawVisits
@@ -348,6 +348,13 @@ export default function ProxyVisitsPage() {
 						<tbody className="divide-y divide-gray-100">
 							{isLoading ? (
 								<TableSkeleton rows={6} cols={8} />
+							) : listQuery.isError ? (
+								<tr>
+									<td colSpan={8} className="px-6 py-12 text-center">
+										<p className="text-red-600 text-sm mb-3">{getErrorMessage(listQuery.error, "تعذّر تحميل الطلبات")}</p>
+										<button type="button" onClick={() => listQuery.refetch()} className="cursor-pointer px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50">إعادة المحاولة</button>
+									</td>
+								</tr>
 							) : visits.length === 0 ? (
 								<tr>
 									<td colSpan={8} className="px-6 py-12 text-center text-gray-500">

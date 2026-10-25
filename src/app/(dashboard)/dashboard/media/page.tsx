@@ -29,6 +29,7 @@ import {
 	useMediaReferences,
 } from "@/lib/queries/media"
 import { useListPage } from "@/lib/use-list-page"
+import Select from "@/components/ui/Select"
 
 type ViewMode = "grid" | "list"
 
@@ -176,9 +177,9 @@ export default function MediaPage() {
 						<Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
 					)}
 				</div>
-				<select value={mimeType} onChange={(e) => onMimeChange(e.target.value)} className="cursor-pointer px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
+				<Select value={mimeType} onChange={(e) => onMimeChange(e.target.value)} className="cursor-pointer px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
 					{MIME_FILTERS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-				</select>
+				</Select>
 				<div className="flex gap-1 bg-gray-100 rounded-md p-1">
 					<button onClick={() => setView("grid")} className={`cursor-pointer p-1.5 rounded transition-colors ${view === "grid" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-gray-900"}`} title="شبكة"><Grid3x3 className="h-4 w-4" /></button>
 					<button onClick={() => setView("list")} className={`cursor-pointer p-1.5 rounded transition-colors ${view === "list" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-gray-900"}`} title="قائمة"><ListIcon className="h-4 w-4" /></button>

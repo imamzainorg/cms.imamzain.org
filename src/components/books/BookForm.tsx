@@ -21,6 +21,7 @@ import MediaInput from "@/components/ui/MediaInput"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import ParentBookPicker from "@/components/books/ParentBookPicker"
 import { Loader2, UploadCloud, Plus, Pencil } from "lucide-react"
+import { FormSelect } from "@/components/ui/Select"
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -376,11 +377,11 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-									<select {...register(`translations.${index}.lang`)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+									<FormSelect control={control} name={`translations.${index}.lang`} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 										{languages.map((l) => (
 											<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
 										))}
-									</select>
+									</FormSelect>
 								</div>
 								<div className="md:col-span-2 flex items-end">
 									<label className="flex items-center gap-2">
@@ -482,14 +483,14 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 			<aside className="space-y-6">
 				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5 space-y-4">
 					<h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">التصنيف</h3>
-					<select {...register("category_id")} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+					<FormSelect control={control} name={"category_id"} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 						<option value="">اختر تصنيفاً</option>
 						{categories.map((cat) => (
 							<option key={cat.id} value={cat.id}>
 								{categoryName(cat.book_category_translations, cat.translation)}
 							</option>
 						))}
-					</select>
+					</FormSelect>
 					{errors.category_id && <p className="text-sm text-red-600">{errors.category_id.message}</p>}
 				</div>
 

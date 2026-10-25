@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest"
+import userEvent from "@testing-library/user-event"
 import { setupServer } from "msw/node"
 import { http, HttpResponse } from "msw"
 import { screen, waitFor, fireEvent, act } from "@testing-library/react"
@@ -54,8 +55,9 @@ describe("PostsPage", () => {
 		await waitFor(() => expect(screen.getByText("خبر الاختبار")).toBeInTheDocument())
 		// Header
 		expect(screen.getByText("الأخبار")).toBeInTheDocument()
-		// Category appears in the filter dropdown
-		expect(screen.getByText("أخبار")).toBeInTheDocument()
+		// Category appears in the filter dropdown once it is opened
+		await userEvent.click(screen.getAllByRole("combobox")[0])
+		expect(await screen.findByRole("option", { name: "أخبار" })).toBeInTheDocument()
 	})
 
 	it("shows the empty state when no posts match", async () => {

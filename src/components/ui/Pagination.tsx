@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { formatArNumber, toArabicDigits } from "@/lib/dates"
+import Select from "@/components/ui/Select"
 
 type Props = {
 	page: number
@@ -58,7 +59,7 @@ export default function Pagination({
 					</span>
 				</span>
 				{onLimit && (
-					<select
+					<Select
 						value={limit}
 						onChange={(e) => onLimit(Number(e.target.value))}
 						className="cursor-pointer text-xs border border-[hsl(var(--border))] rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
@@ -68,7 +69,7 @@ export default function Pagination({
 								{s} / صفحة
 							</option>
 						))}
-					</select>
+					</Select>
 				)}
 			</div>
 			<div className="flex items-center gap-2">

@@ -19,6 +19,7 @@ import { useTranslationsField } from "@/lib/use-translations-field"
 import Modal from "@/components/ui/Modal"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import { FileAudio, FileText, Globe, Loader2, Plus, Trash2, UploadCloud } from "lucide-react"
+import Select, { FormSelect } from "@/components/ui/Select"
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const HTTP_URL_RE = /^https?:\/\/.+/i
@@ -377,11 +378,11 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-									<select {...register(`translations.${index}.lang`)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+									<FormSelect control={control} name={`translations.${index}.lang`} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 										{languages.map((l) => (
 											<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
 										))}
-									</select>
+									</FormSelect>
 								</div>
 								<div className="md:col-span-2 flex items-end">
 									<label className="flex items-center gap-2">
@@ -413,14 +414,14 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 							<Plus className="h-3.5 w-3.5" strokeWidth={1.6} />إضافة محاضر
 						</button>
 					</div>
-					<select {...register("speaker_id")} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+					<FormSelect control={control} name={"speaker_id"} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 						<option value="">بدون محاضر</option>
 						{speakers.map((s) => (
 							<option key={s.id} value={s.id}>
 								{pickTranslation(s.speaker_translations, s.translation)?.name || "بدون اسم"}
 							</option>
 						))}
-					</select>
+					</FormSelect>
 				</div>
 
 				{/* (d) الرابط المختصر + النشر */}
@@ -530,9 +531,9 @@ function SpeakerQuickCreate({ onClose, onCreated }: {
 							<div className="flex items-end gap-3">
 								<div className="flex-1">
 									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-									<select value={t.lang} onChange={(e) => updateAt(i, { lang: e.target.value } as Partial<SpeakerTranslationItem>)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+									<Select value={t.lang} onChange={(e) => updateAt(i, { lang: e.target.value } as Partial<SpeakerTranslationItem>)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 										{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-									</select>
+									</Select>
 								</div>
 								<label className="flex items-center gap-2 cursor-pointer pb-2">
 									<input type="checkbox" checked={t.is_default} onChange={() => setDefault(i)} className="h-4 w-4 text-primary rounded" />

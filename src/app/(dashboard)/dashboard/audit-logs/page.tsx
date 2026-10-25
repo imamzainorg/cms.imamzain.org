@@ -17,6 +17,8 @@ import { humanizeAuditAction, humanizeResource } from "@/lib/humanize"
 import { AUDIT_ACTION_GROUPS, AUDIT_RESOURCE_OPTIONS, specialAuditLabel } from "@/lib/audit-vocabulary"
 import { useAuditLogsList } from "@/lib/queries/audit-logs"
 import { useListPage } from "@/lib/use-list-page"
+import Select from "@/components/ui/Select"
+import DatePicker from "@/components/ui/DatePicker"
 
 type ActionStyle = {
 	icon: LucideIcon
@@ -117,7 +119,7 @@ export default function AuditLogsPage() {
 				<form onSubmit={applyFilters} className="bg-white shadow-sm rounded-xl border border-gray-200 p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">الإجراء</label>
-						<select
+						<Select
 							value={filters.action}
 							onChange={(e) => setFilters({ ...filters, action: e.target.value })}
 							className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer bg-white"
@@ -129,26 +131,26 @@ export default function AuditLogsPage() {
 									{g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
 								</optgroup>
 							))}
-						</select>
+						</Select>
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">نوع المحتوى</label>
-						<select
+						<Select
 							value={filters.resource_type}
 							onChange={(e) => setFilters({ ...filters, resource_type: e.target.value })}
 							className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer bg-white"
 						>
 							<option value="">كل الأنواع</option>
 							{AUDIT_RESOURCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-						</select>
+						</Select>
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">من تاريخ</label>
-						<input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer" />
+						<DatePicker value={filters.from} onChange={(v) => setFilters({ ...filters, from: v })} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer" />
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-gray-500 mb-1">إلى تاريخ</label>
-						<input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer" />
+						<DatePicker value={filters.to} onChange={(v) => setFilters({ ...filters, to: v })} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary cursor-pointer" />
 					</div>
 					<div className="col-span-2 md:col-span-4 flex gap-2">
 						<button type="submit" className="px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90 cursor-pointer">تطبيق</button>

@@ -17,6 +17,7 @@ import { usePaperCategoriesList } from "@/lib/queries/paper-categories"
 import RichTextEditor from "@/components/ui/RichTextEditor"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import { Loader2, Plus, Trash2, UploadCloud } from "lucide-react"
+import { FormSelect } from "@/components/ui/Select"
 
 // Server limits (worker/src/features/academic-papers/schemas.ts) — inputs mirror
 // them, counted in UTF-16 code units like an HTML maxlength.
@@ -268,14 +269,14 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">التصنيف *</label>
-						<select {...register("category_id")} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
+						<FormSelect control={control} name={"category_id"} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
 							<option value="">اختر تصنيفاً</option>
 							{categories.map((cat) => (
 								<option key={cat.id} value={cat.id}>
 									{categoryName(cat.academic_paper_category_translations, cat.translation)}
 								</option>
 							))}
-						</select>
+						</FormSelect>
 						{errors.category_id && <p className="mt-1 text-sm text-red-600">{errors.category_id.message}</p>}
 					</div>
 					<div>
@@ -364,11 +365,11 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">اللغة *</label>
-								<select {...register(`translations.${index}.lang`)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
+								<FormSelect control={control} name={`translations.${index}.lang`} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary">
 									{languages.map((l) => (
 										<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
 									))}
-								</select>
+								</FormSelect>
 							</div>
 							<div className="flex items-end">
 								<label className="flex items-center gap-2">

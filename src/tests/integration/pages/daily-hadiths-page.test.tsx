@@ -99,7 +99,8 @@ describe("DailyHadithsPage (Hijri calendar)", () => {
 		renderWithQueryClient(<DailyHadithsPage />)
 		await waitFor(() => expect(screen.getByText("10 جمادى الأولى")).toBeInTheDocument())
 
-		await userEvent.selectOptions(screen.getByLabelText("الشهر الهجري"), "5")
+		await userEvent.click(screen.getByRole("combobox", { name: "الشهر الهجري" }))
+		await userEvent.click(screen.getAllByRole("option")[5])
 		await waitFor(() => expect(seen).toContain("5"))
 		await waitFor(() => expect(screen.queryByText(/بلا يوم — لا يظهر على الموقع/)).not.toBeInTheDocument())
 	})
@@ -115,7 +116,7 @@ describe("DailyHadithsPage (Hijri calendar)", () => {
 		await waitFor(() => expect(adminHit).toBe(true))
 		// Both stored languages are editable, with the Hijri day preselected.
 		await waitFor(() => expect(screen.getByRole("button", { name: /الإنجليزية/ })).toBeInTheDocument())
-		expect((screen.getByLabelText("الشهر الهجري", { selector: "select[aria-label]" }) as HTMLSelectElement).value).toBe("5")
-		expect((screen.getByLabelText("اليوم من الشهر") as HTMLSelectElement).value).toBe("9")
+		expect(screen.getAllByRole("combobox", { name: "الشهر الهجري" }).at(-1)).toHaveTextContent("جمادى الأولى")
+		expect(screen.getByRole("combobox", { name: "اليوم من الشهر" })).toHaveTextContent("9")
 	})
 })

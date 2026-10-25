@@ -139,7 +139,7 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 						onClick={() => setOpen(true)}
 						className="cursor-pointer flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.4)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] disabled:opacity-50"
 					>
-						<Library className="h-4 w-4" strokeWidth={1.6} /> من المكتبة
+						<Library className="h-4 w-4" strokeWidth={1.6} /> من مكتبة الوسائط
 					</button>
 				</div>
 				<input

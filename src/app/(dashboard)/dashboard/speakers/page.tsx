@@ -23,6 +23,7 @@ import {
 } from "@/lib/queries/speakers"
 import { useTranslationsField } from "@/lib/use-translations-field"
 import { useListPage } from "@/lib/use-list-page"
+import Select from "@/components/ui/Select"
 
 type DialogState =
 	| { mode: "create" }
@@ -228,9 +229,9 @@ function SpeakerEditor({ initial, onClose }: { initial?: Speaker; onClose: () =>
 							<div className="flex items-end gap-3">
 								<div className="flex-1">
 									<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-									<select value={t.lang} onChange={(e) => updateAt(i, { lang: e.target.value } as Partial<SpeakerTranslationItem>)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+									<Select value={t.lang} onChange={(e) => updateAt(i, { lang: e.target.value } as Partial<SpeakerTranslationItem>)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 										{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-									</select>
+									</Select>
 								</div>
 								<label className="flex items-center gap-2 cursor-pointer pb-2">
 									<input type="checkbox" checked={t.is_default} onChange={() => setDefault(i)} className="h-4 w-4 text-primary rounded" />

@@ -17,6 +17,7 @@ type ListParams = {
 	country?: string
 	from?: string
 	to?: string
+	order?: "asc" | "desc"
 }
 
 /**
@@ -37,7 +38,7 @@ export function useProxyVisitsList(params: ListParams = {}) {
  * No dedicated stats endpoint — a `limit:1` request per filter and we read
  * `pagination.total` (same pattern as `useSubscriberCount`).
  */
-export function useProxyVisitCount(filter: { status?: Status } = {}) {
+export function useProxyVisitCount(filter: Omit<ListParams, "page" | "limit" | "order"> = {}) {
 	return useQuery({
 		queryKey: queryKeys.proxyVisits.list({ count: true, ...filter }),
 		queryFn: async () => {

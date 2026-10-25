@@ -18,6 +18,7 @@ import {
 	useUpsertSetting,
 	useDeleteSetting,
 } from "@/lib/queries/settings"
+import Select from "@/components/ui/Select"
 
 type FieldKind = "text" | "textarea" | "url" | "email" | "tel" | "number" | "boolean" | "json"
 
@@ -514,7 +515,7 @@ function CustomSettingDialog({
 					</div>
 					<div>
 						<label className="block text-sm font-medium text-gray-800 mb-1.5">النوع</label>
-						<select
+						<Select
 							value={type}
 							onChange={(e) => setType(e.target.value as SettingType)}
 							disabled={isEdit}
@@ -524,16 +525,16 @@ function CustomSettingDialog({
 							<option value="number">{TYPE_LABEL.number}</option>
 							<option value="boolean">{TYPE_LABEL.boolean}</option>
 							<option value="json">{TYPE_LABEL.json}</option>
-						</select>
+						</Select>
 						<p className="mt-1 text-[11px] text-gray-500">النوع غير قابل للتعديل بعد الإنشاء.</p>
 					</div>
 					<div>
 						<label className="block text-sm font-medium text-gray-800 mb-1.5">القيمة</label>
 						{type === "boolean" ? (
-							<select value={value} onChange={(e) => setValue(e.target.value)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+							<Select value={value} onChange={(e) => setValue(e.target.value)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 								<option value="true">true</option>
 								<option value="false">false</option>
-							</select>
+							</Select>
 						) : type === "json" ? (
 							<textarea
 								value={value}

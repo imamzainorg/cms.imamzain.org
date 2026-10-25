@@ -17,6 +17,7 @@ import MediaInput from "@/components/ui/MediaInput"
 import MediaPicker from "@/components/ui/MediaPicker"
 import TranslationTabs, { pickTranslationsOrEmpty } from "@/components/forms/TranslationTabs"
 import { Loader2, Eye, EyeOff, ListOrdered, Wand2 } from "lucide-react"
+import { FormSelect } from "@/components/ui/Select"
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -206,11 +207,11 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 									<div>
 										<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-										<select {...register(`translations.${index}.lang`)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+										<FormSelect control={control} name={`translations.${index}.lang`} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 											{languages.map((l) => (
 												<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
 											))}
-										</select>
+										</FormSelect>
 									</div>
 									<div className="md:col-span-2 flex items-end">
 										<label className="flex items-center gap-2">

@@ -64,9 +64,10 @@ describe("Pagination", () => {
 				onLimit={onLimit}
 			/>,
 		)
-		const select = container.querySelector("select") as HTMLSelectElement
+		const select = container.querySelector('[role="combobox"]') as HTMLElement
 		expect(select).not.toBeNull()
-		fireEvent.change(select, { target: { value: "100" } })
+		fireEvent.click(select)
+		fireEvent.click(screen.getByRole("option", { name: /^100/ }))
 		expect(onLimit).toHaveBeenCalledWith(100)
 	})
 
@@ -74,6 +75,6 @@ describe("Pagination", () => {
 		const { container } = render(
 			<Pagination page={1} pages={1} total={50} limit={20} onPage={() => {}} />,
 		)
-		expect(container.querySelector("select")).toBeNull()
+		expect(container.querySelector('[role="combobox"]')).toBeNull()
 	})
 })

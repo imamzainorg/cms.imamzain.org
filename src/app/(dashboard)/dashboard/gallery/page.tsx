@@ -29,6 +29,8 @@ import {
 } from "@/lib/queries/gallery"
 import { useGalleryCategoriesList } from "@/lib/queries/gallery-categories"
 import { useTranslationsField } from "@/lib/use-translations-field"
+import Select from "@/components/ui/Select"
+import DatePicker from "@/components/ui/DatePicker"
 
 type StatusFilter = "all" | "published" | "draft"
 
@@ -440,11 +442,11 @@ function GalleryImageDialogContent({
 							<div className="grid grid-cols-2 gap-3">
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">التصنيف</label>
-									<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+									<Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 										<option value="">— بدون —</option>
 										{categories.map((c) => <option key={c.id} value={c.id}>{catName(c)}</option>)}
-									</select>
+									</Select>
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">المصوِّر</label>
@@ -452,7 +454,7 @@ function GalleryImageDialogContent({
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">تاريخ الالتقاط</label>
-									<input type="date" value={takenAt} onChange={(e) => setTakenAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
+									<DatePicker value={takenAt} onChange={(v) => setTakenAt(v)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm" />
 								</div>
 								<div>
 									<label className="block text-xs font-medium text-gray-500 mb-1">رُفعت في</label>

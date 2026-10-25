@@ -13,6 +13,8 @@ export const proxyVisitsService = {
 		/** ISO timestamps bounding `submitted_at`. */
 		from?: string
 		to?: string
+		/** Sort by submission time (default desc). */
+		order?: "asc" | "desc"
 	}) => api.get<PaginatedResponse<ProxyVisit>>("/forms/proxy-visits", { params }),
 
 	update: (id: string, body: Partial<{

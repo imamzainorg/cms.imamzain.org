@@ -12,6 +12,7 @@
 	// workers.dev copy can load but cannot log in until its origin is listed.
 	"workers_dev": true,
 	"preview_urls": true,
+	"previews": {},
 	"assets": {
 		"directory": "./out",
 		"html_handling": "auto-trailing-slash",

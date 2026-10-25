@@ -1,3 +1,4 @@
+import Select from "@/components/ui/Select"
 "use client"
 
 type Props<T> = {
@@ -25,7 +26,7 @@ export default function CategoryFilterSelect<T>({
 	placeholder = "كل التصنيفات",
 }: Props<T>) {
 	return (
-		<select
+		<Select
 			value={value}
 			onChange={(e) => onChange(e.target.value)}
 			className={`cursor-pointer px-3 py-1.5 text-sm bg-white border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all ${className}`}
@@ -36,6 +37,6 @@ export default function CategoryFilterSelect<T>({
 					{getName(c)}
 				</option>
 			))}
-		</select>
+		</Select>
 	)
 }

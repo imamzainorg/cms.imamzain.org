@@ -35,6 +35,7 @@ import {
 	useUpdateStoreLocation,
 	useRemoveStoreLocation,
 } from "@/lib/queries/stores"
+import Select from "@/components/ui/Select"
 
 type DialogState =
 	| { mode: "create-store" }
@@ -293,9 +294,9 @@ function StoreEditor({ initial, onClose }: { initial?: Store; onClose: () => voi
 						<div key={i} className={activeLang === t.lang ? "block space-y-3" : "hidden"}>
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-								<select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+								<Select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 									{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-								</select>
+								</Select>
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">اسم المدينة *</label>
@@ -421,9 +422,9 @@ function LocationEditor({ store, initial, onClose }: { store: Store; initial?: S
 						<div key={i} className={activeLang === t.lang ? "block space-y-3" : "hidden"}>
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-								<select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+								<Select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 									{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-								</select>
+								</Select>
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">اسم نقطة البيع *</label>

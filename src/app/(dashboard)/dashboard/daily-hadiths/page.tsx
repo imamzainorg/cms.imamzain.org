@@ -35,6 +35,7 @@ import {
 import { useTranslationsField } from "@/lib/use-translations-field"
 import { useHasPermission } from "@/lib/permissions"
 import { HIJRI_MONTHS, formatHijriDay, hijriMonthName } from "@/lib/hijri"
+import Select from "@/components/ui/Select"
 
 type DialogState =
 	| { mode: "create" }
@@ -99,7 +100,7 @@ export default function DailyHadithsPage() {
 
 			<div className="flex flex-wrap items-center gap-3">
 				<label htmlFor="hadith-month" className="text-sm font-medium text-gray-700">الشهر الهجري</label>
-				<select
+				<Select
 					id="hadith-month"
 					value={month}
 					onChange={(e) => { setMonth(e.target.value); setPage(1) }}
@@ -109,7 +110,7 @@ export default function DailyHadithsPage() {
 					{HIJRI_MONTHS.map((name, i) => (
 						<option key={name} value={i + 1}>{name}</option>
 					))}
-				</select>
+				</Select>
 				{!month && (
 					<span className="text-xs text-gray-500">الأحاديث التي بلا يوم تظهر في آخر القائمة.</span>
 				)}
@@ -290,10 +291,10 @@ function SetHijriDateModal({ onClose }: { onClose: () => void }) {
 							</div>
 							<div>
 								<label className="block text-xs font-medium text-gray-600 mb-1">الشهر</label>
-								<select value={month} onChange={(e) => setMonth(e.target.value)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" required>
+								<Select value={month} onChange={(e) => setMonth(e.target.value)} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" required>
 									<option value="" disabled>اختر</option>
 									{HIJRI_MONTHS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
-								</select>
+								</Select>
 							</div>
 							<div>
 								<label className="block text-xs font-medium text-gray-600 mb-1">السنة</label>
@@ -441,7 +442,7 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-1">اليوم الهجري الذي يُعرض فيه</label>
 						<div className="grid grid-cols-2 gap-3 max-w-md">
-							<select
+							<Select
 								value={hijriMonth}
 								onChange={(e) => { setHijriMonth(e.target.value); if (!e.target.value) setHijriDay("") }}
 								aria-label="الشهر الهجري"
@@ -449,8 +450,8 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 							>
 								<option value="">بلا يوم</option>
 								{HIJRI_MONTHS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
-							</select>
-							<select
+							</Select>
+							<Select
 								value={hijriDay}
 								onChange={(e) => setHijriDay(e.target.value)}
 								disabled={!hijriMonth}
@@ -459,7 +460,7 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 							>
 								<option value="">اليوم</option>
 								{Array.from({ length: 30 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-							</select>
+							</Select>
 						</div>
 						<p className="mt-1 text-[11px] text-gray-500">
 							يُعرض الحديث في هذا اليوم من كل عام. الحديث بلا يوم يبقى محفوظاً لكنه لا يظهر على الموقع. إن كان الشهر 29 يوماً فحديث اليوم 30 يُتخطّى في تلك السنة.
@@ -489,9 +490,9 @@ function HadithEditor({ initial, onClose }: { initial?: DailyHadith; onClose: ()
 						<div key={i} className={activeLang === t.lang ? "block space-y-3" : "hidden"}>
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">اللغة</label>
-								<select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
+								<Select value={t.lang} onChange={(e) => updateT(i, { lang: e.target.value })} className="cursor-pointer w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm">
 									{languages.map((l) => <option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>)}
-								</select>
+								</Select>
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-1">نص الحديث *</label>

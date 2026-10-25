@@ -15,6 +15,7 @@ import { useActiveLanguages, languageLabel } from "@/lib/useLanguages"
 import { Plus, Trash2, Pencil, Loader2, Tag, X, Globe } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import type { PaginatedResponse, CategoryTranslation } from "@/types"
+import Select from "@/components/ui/Select"
 
 type GenericCategory = {
 	id: string
@@ -292,7 +293,7 @@ function CategoryDialog({
 								<div className="flex items-center gap-2">
 									<div className="relative w-32 shrink-0">
 										<Globe className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-										<select
+										<Select
 											value={t.lang}
 											onChange={(e) => updateT(i, { lang: e.target.value })}
 											className="cursor-pointer w-full pr-8 pl-2 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm"
@@ -300,7 +301,7 @@ function CategoryDialog({
 											{langOptions.map((l) => (
 												<option key={l.code} value={l.code}>{languageLabel(l.code, l.native_name)}</option>
 											))}
-										</select>
+										</Select>
 									</div>
 									<div className="flex-1">
 										<input

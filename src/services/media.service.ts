@@ -20,6 +20,8 @@ export type UploadUrlResponse = {
 	publicUrl: string
 	mediaId: string
 	maxBytes: number
+	/** Headers the PUT must send exactly (signed into `uploadUrl`). Older APIs omit it. */
+	headers?: Record<string, string>
 }
 
 /** Surfaced as a typed error from `uploadFile` so the UI can react gracefully. */
@@ -131,7 +133,7 @@ export const mediaService = {
 		const putResp = await fetch(urlData.uploadUrl, {
 			method: "PUT",
 			body: file,
-			headers: { "Content-Type": file.type },
+			headers: urlData.headers ?? { "Content-Type": file.type },
 		})
 		if (!putResp.ok) {
 			// R2 rejected the PUT (expired signature, mismatched Content-Type…).

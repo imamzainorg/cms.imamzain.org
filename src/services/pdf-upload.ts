@@ -9,6 +9,8 @@ export type PdfUploadUrlResponse = {
 	key: string
 	publicUrl: string
 	maxBytes: number
+	/** Headers the PUT must send exactly (signed into `uploadUrl`). Older APIs omit it. */
+	headers?: Record<string, string>
 }
 
 type ErrorKind = "audio" | "pdf"
@@ -89,7 +91,7 @@ export async function requestAndUploadPdf(
 	const resp = await fetch(urlData.uploadUrl, {
 		method: "PUT",
 		body: file,
-		headers: { "Content-Type": "application/pdf" },
+		headers: urlData.headers ?? { "Content-Type": "application/pdf" },
 	})
 	if (!resp.ok) {
 		throw new AudioUploadFailedError()

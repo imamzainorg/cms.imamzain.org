@@ -108,6 +108,30 @@ describe("mediaService", () => {
 		expect("height" in confirmBody).toBe(false)
 		expect(confirmBody.filename).toBe("abc.jpg")
 	}, 8000)
+	it("sends the signed headers the API returns on the PUT, exactly (R2 refuses a PUT missing one)", async () => {
+		const signed = {
+			"Content-Type": "image/jpeg",
+			"Cache-Control": "public, max-age=31536000, immutable",
+			"Content-Disposition": "inline; filename*=UTF-8''%D8%B5%D9%88%D8%B1%D8%A9.jpg",
+		}
+		let putHeaders: Record<string, string> = {}
+		server.use(
+			http.post(`${API}/media/upload-url`, () => HttpResponse.json(wrap({ ...uploadUrlPayload, headers: signed }), { status: 201 })),
+			http.put(R2_URL, ({ request }) => {
+				putHeaders = Object.fromEntries(request.headers.entries())
+				return new HttpResponse(null, { status: 200 })
+			}),
+			http.post(`${API}/media/confirm`, () => HttpResponse.json(wrap({ ...mockMedia, variants_status: "ready" }), { status: 201 })),
+		)
+		const file = new File(["image-content"], "صورة.jpg", { type: "image/jpeg" })
+		Object.defineProperty(file, "size", { value: 102400 })
+		vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test")
+		vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined)
+		await mediaService.uploadFile(file)
+		expect(putHeaders["content-type"]).toBe(signed["Content-Type"])
+		expect(putHeaders["cache-control"]).toBe(signed["Cache-Control"])
+		expect(putHeaders["content-disposition"]).toBe(signed["Content-Disposition"])
+	}, 8000)
 	it("fetches what still references a media file", async () => {
 		server.use(http.get(`${API}/media/m1/references`, () =>
 			HttpResponse.json(wrap({

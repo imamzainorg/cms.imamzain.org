@@ -22,6 +22,8 @@ export type AudioUploadUrlResponse = {
 	key: string
 	publicUrl: string
 	maxBytes: number
+	/** Headers the PUT must send exactly (signed into `uploadUrl`). Older APIs omit it. */
+	headers?: Record<string, string>
 }
 
 export type AudioUploadKind = "audio" | "pdf"
@@ -137,7 +139,7 @@ export const audiosService = {
 		const resp = await fetch(urlData.uploadUrl, {
 			method: "PUT",
 			body: file,
-			headers: { "Content-Type": contentType },
+			headers: urlData.headers ?? { "Content-Type": contentType },
 		})
 		if (!resp.ok) {
 			throw new AudioUploadFailedError()

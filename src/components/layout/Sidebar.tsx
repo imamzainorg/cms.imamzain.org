@@ -30,6 +30,7 @@ import {
 	MicVocal,
 	type LucideIcon,
 } from "lucide-react"
+import { ListVideo } from "lucide-react"
 import Image from "next/image"
 import { useAuthStore } from "@/store/auth"
 
@@ -152,6 +153,12 @@ const groups: { title: string; items: Item[] }[] = [
 					{ name: "كل الأحاديث", href: "/dashboard/daily-hadiths", icon: List },
 					{ name: "سلة المهملات", href: "/dashboard/daily-hadiths/trash", icon: Trash2 },
 				],
+			},
+			{
+				name: "سلاسل الفيديو",
+				href: "/dashboard/video-series",
+				icon: ListVideo,
+				permissions: ["videos:read", "videos:update"],
 			},
 		],
 	},

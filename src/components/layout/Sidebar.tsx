@@ -28,6 +28,7 @@ import {
 	Store,
 	AudioLines,
 	MicVocal,
+	Video as VideoIcon,
 	type LucideIcon,
 } from "lucide-react"
 import Image from "next/image"
@@ -116,6 +117,12 @@ const groups: { title: string; items: Item[] }[] = [
 					{ name: "المحاضرون", href: "/dashboard/speakers", icon: MicVocal },
 					{ name: "سلة المهملات", href: "/dashboard/audios/trash", icon: Trash2 },
 				],
+			},
+			{
+				name: "الفيديوهات",
+				href: "/dashboard/videos",
+				icon: VideoIcon,
+				permissions: ["videos:read", "videos:update"],
 			},
 			{
 				name: "الصفحات الثابتة",

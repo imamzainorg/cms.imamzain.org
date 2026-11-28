@@ -12,15 +12,14 @@ type GalleryTranslationInput = {
 
 export const galleryService = {
 	// Admin route — surfaces drafts too. The public GET /gallery silently
-	// hides unpublished images.
-	// NOTE: GalleryQueryDto has no is_published filter (forbidNonWhitelisted
-	// would 400 it) — /gallery/admin always returns drafts + published together.
+	// hides unpublished images and rejects is_published.
 	list: (params?: {
 		page?: number
 		limit?: number
 		category_id?: string
 		tags?: string[]
 		locations?: string[]
+		is_published?: boolean
 	}) => api.get<PaginatedResponse<GalleryImage>>("/gallery/admin", { params }),
 
 	// Admin detail — the public GET /gallery/:id 404s on drafts.

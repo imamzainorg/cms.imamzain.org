@@ -12,6 +12,7 @@ import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
 import IconButton from "@/components/ui/IconButton"
 import FilterPills from "@/components/ui/FilterPills"
+import Pagination from "@/components/ui/Pagination"
 import MediaInput from "@/components/ui/MediaInput"
 import MediaPicker from "@/components/ui/MediaPicker"
 import type { MediaRecord } from "@/types"
@@ -29,6 +30,7 @@ import {
 } from "@/lib/queries/gallery"
 import { useGalleryCategoriesList } from "@/lib/queries/gallery-categories"
 import { useTranslationsField } from "@/lib/use-translations-field"
+import { useListPage } from "@/lib/use-list-page"
 import Select from "@/components/ui/Select"
 import DatePicker from "@/components/ui/DatePicker"
 
@@ -47,14 +49,23 @@ export default function GalleryPage() {
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [pickerOpen, setPickerOpen] = useState(false)
 	const { confirm, dialog } = useConfirm()
+	const { page, setPage, limit, setLimit, resetPageAndSelection } = useListPage({ initialLimit: 100 })
 
-	// GalleryQueryDto has no is_published filter (forbidNonWhitelisted would
-	// 400 it) — filter by status client-side over the fetched batch instead.
-	const galleryQuery = useGalleryList({ limit: 100 })
+	const galleryQuery = useGalleryList({
+		page,
+		limit,
+		is_published: statusFilter === "all" ? undefined : statusFilter === "published",
+	})
 	const categoriesQuery = useGalleryCategoriesList({ limit: 100 })
 	const images = galleryQuery.data?.items ?? []
+	const total = galleryQuery.data?.pagination.total ?? 0
+	const pages = galleryQuery.data?.pagination.pages ?? 1
 	const categories = categoriesQuery.data?.items ?? []
-	const loading = galleryQuery.isLoading
+
+	const onStatusChange = (v: StatusFilter) => {
+		setStatusFilter(v)
+		resetPageAndSelection()
+	}
 
 	const uploadMedia = useUploadMedia()
 	const createGallery = useCreateGalleryItem()
@@ -130,12 +141,33 @@ export default function GalleryPage() {
 	const getTitle = (img: GalleryImage) =>
 		pickTranslation(img.gallery_image_translations, img.translation)?.title || ""
 
-	const filtered = images.filter((img) => {
-		if (statusFilter !== "all" && img.is_published !== (statusFilter === "published")) return false
+	// The API filters by status; this repeats it for the previous page kept on screen while the next one
+	// loads, and for an image the publish toggle has just flipped.
+	const inStatus = images.filter(
+		(img) => statusFilter === "all" || img.is_published === (statusFilter === "published"),
+	)
+	const loading = galleryQuery.isLoading || (galleryQuery.isFetching && inStatus.length === 0)
+	// The API has no gallery search, so this only covers the page on screen.
+	const filtered = inStatus.filter((img) => {
 		const title = getTitle(img).toLowerCase()
 		const q = search.toLowerCase()
 		return !q || title.includes(q) || img.tags.some((t) => t.toLowerCase().includes(q))
 	})
+
+	const emptyTitle = search
+		? "لا توجد صور تطابق البحث"
+		: statusFilter === "draft"
+			? "لا توجد مسودات"
+			: statusFilter === "published"
+				? "لا توجد صور منشورة"
+				: "لا توجد صور في المعرض بعد"
+	const emptyDescription = search
+		? pages > 1
+			? "البحث يشمل صور الصفحة الحالية فقط. جرّب صفحة أخرى أو كلمات بحث مختلفة."
+			: "جرّب كلمات بحث مختلفة."
+		: statusFilter !== "all"
+			? "اختر «الكل» لعرض بقية الصور."
+			: "ارفع صوراً لإنشاء معرض يظهر للزائرين على الموقع."
 
 	return (
 		<div className="space-y-6">
@@ -172,7 +204,7 @@ export default function GalleryPage() {
 				<FilterPills<StatusFilter>
 					variant="segmented"
 					value={statusFilter}
-					onChange={setStatusFilter}
+					onChange={onStatusChange}
 					options={[
 						{ value: "all", label: "الكل" },
 						{ value: "published", label: "منشور" },
@@ -187,9 +219,9 @@ export default function GalleryPage() {
 				<EmptyState
 					variant="card"
 					icon={ImageIcon}
-					title={search ? "لا توجد صور تطابق البحث" : "لا توجد صور في المعرض بعد"}
-					description={search ? "جرّب كلمات بحث مختلفة." : "ارفع صوراً لإنشاء معرض يظهر للزائرين على الموقع."}
-					action={!search && (
+					title={emptyTitle}
+					description={emptyDescription}
+					action={!search && statusFilter === "all" && (
 						<label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-primary/90 ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
 							{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
 							ارفع أول صورة
@@ -236,6 +268,15 @@ export default function GalleryPage() {
 					))}
 				</div>
 			)}
+
+			<Pagination
+				page={page}
+				pages={pages}
+				total={total}
+				limit={limit}
+				onPage={setPage}
+				onLimit={setLimit}
+			/>
 
 			{selectedId && (
 				<GalleryImageDialog

@@ -8,6 +8,7 @@ type ListParams = {
 	page?: number
 	limit?: number
 	category_id?: string
+	is_published?: boolean
 }
 
 type CreateBody = Parameters<typeof galleryService.create>[0]

@@ -86,6 +86,7 @@ src/
 │   │       ├── stores/             Sale points (منافذ البيع) (+ trash)
 │   │       ├── media/              Raw media library
 │   │       ├── daily-hadiths/      Daily hadiths (+ trash)
+│   │       ├── video-series/       YouTube playlists as series + auto-publish switch
 │   │       ├── contacts/           Contact form inbox (+ trash)
 │   │       ├── proxy-visits/       Proxy visit requests (+ trash)
 │   │       ├── newsletter/         Subscribers (+ trash)

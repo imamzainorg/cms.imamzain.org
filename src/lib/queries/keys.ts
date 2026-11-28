@@ -107,6 +107,12 @@ export const queryKeys = {
 		allLanguages: () => [...queryKeys.languages.all, "all"] as const,
 		active: () => [...queryKeys.languages.all, "active"] as const,
 	},
+	videos: {
+		all: ["videos"] as const,
+		lists: () => [...queryKeys.videos.all, "list"] as const,
+		list: (params: Record<string, unknown>) =>
+			[...queryKeys.videos.lists(), params] as const,
+	},
 	contest: {
 		all: ["contest"] as const,
 		attempts: () => [...queryKeys.contest.all, "attempts"] as const,

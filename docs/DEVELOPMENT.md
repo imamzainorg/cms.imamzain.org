@@ -81,6 +81,7 @@ src/
 │   │       ├── gallery/            Image gallery (+ trash)
 │   │       ├── audios/             Audio library (+ trash)
 │   │       ├── speakers/           Audio speakers/lecturers (+ trash)
+│   │       ├── videos/             YouTube videos: publish/hide, featured, speaker, slug
 │   │       ├── static-pages/       Static pages CRUD (+ trash)
 │   │       ├── stores/             Sale points (منافذ البيع) (+ trash)
 │   │       ├── media/              Raw media library

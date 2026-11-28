@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray, Controller } from "react-hook-form"
+import { useForm, useFieldArray, Controller, type FieldErrors } from "react-hook-form"
+import { useFormDraft } from "@/lib/use-form-draft"
+import { reportInvalid } from "@/lib/form-errors"
+import DraftNotice from "@/components/forms/DraftNotice"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import axios from "axios"
@@ -42,8 +45,8 @@ const translationSchema = z.object({
 			message: `المحتوى كبير جداً (الحد الأقصى ${Math.round(MAX_BODY_BYTES / 1024)} ك.ب). اختصره أو اقسمه إلى أخبار.`,
 		}),
 	is_default: z.boolean(),
-	meta_title: z.string().max(80).optional(),
-	meta_description: z.string().max(180).optional(),
+	meta_title: z.string().max(80, "عنوان SEO أطول من 80 حرفاً").optional(),
+	meta_description: z.string().max(180, "وصف SEO أطول من 180 حرفاً").optional(),
 	og_image_id: z.string().nullable().optional(),
 })
 
@@ -141,7 +144,7 @@ export default function PostForm({ post }: { post?: Post }) {
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, setError, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, getValues, setValue, setError, reset, formState: { errors } } =
 		useForm<PostFormData>({
 			resolver: zodResolver(postFormSchema),
 			defaultValues: buildDefaults(),
@@ -159,6 +162,7 @@ export default function PostForm({ post }: { post?: Post }) {
 	}, [categoriesQuery.error])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
+	const draft = useFormDraft(post ? null : "post", { watch, getValues, reset }, buildDefaults)
 	const translations = watch("translations")
 	const isPublished = watch("is_published")
 	const isFeatured = watch("is_featured")
@@ -197,20 +201,26 @@ export default function PostForm({ post }: { post?: Post }) {
 		})
 	}
 
-	// Adds the ticked images to the gallery; one already there (409) is fine and is skipped quietly.
+	// Adds the ticked images to the gallery as drafts: an editor completes their details and publishes
+	// them from the gallery page. One already there (409) is left as it is and skipped quietly.
 	const addToGallery = async (ids: string[], data: PostFormData, fallbackTitle: string) => {
 		let added = 0
 		for (const id of ids) {
 			const file = data.attachments.find((a) => a.id === id)?.filename
 			const title = (file ? file.replace(/\.[^.]+$/, "") : fallbackTitle).slice(0, 500) || "صورة"
 			try {
-				await galleryService.create({ media_id: id, translations: [{ lang: "ar", title }] })
+				await galleryService.create({ media_id: id, is_published: false, translations: [{ lang: "ar", title }] })
 				added++
 			} catch (err) {
 				if (getErrorStatus(err) !== 409) toast.error(getErrorMessage(err, "تعذّرت إضافة صورة إلى المعرض"))
 			}
 		}
-		if (added) toast.success(`تمت إضافة ${added} صورة إلى معرض الصور`)
+		if (added) toast.success(`أُضيفت ${added} صورة إلى معرض الصور كمسودة. أكمل بياناتها وانشرها من صفحة المعرض.`, { duration: 8000 })
+	}
+
+	const onInvalid = (invalid: FieldErrors<PostFormData>) => {
+		const lang = reportInvalid(invalid, translations)
+		if (lang) setActiveLang(lang)
 	}
 
 	const onSubmit = (data: PostFormData) => {
@@ -227,6 +237,7 @@ export default function PostForm({ post }: { post?: Post }) {
 		const scheduledAt = localInputToIso(data.published_at)
 		const initialSchedule = isoToLocalInput(post?.published_at)
 		if (!data.is_published && scheduledAt && new Date(scheduledAt).getTime() <= Date.now() && data.published_at !== initialSchedule) {
+			toast.error("الموعد في الماضي — اختر موعداً مستقبلياً أو اتركه فارغاً لحفظها مسودة.")
 			setError("published_at", { type: "validate", message: "الموعد في الماضي — اختر موعداً مستقبلياً أو اتركه فارغاً لحفظها مسودة." })
 			return
 		}
@@ -253,6 +264,7 @@ export default function PostForm({ post }: { post?: Post }) {
 		const defaultTitle = data.translations.find((t) => t.is_default)?.title ?? ""
 		const handlers = {
 			onSuccess: async () => {
+				draft.clear()
 				toast.success(post ? "تم تحديث الخبر" : "تم إنشاء الخبر")
 				await addToGallery(data.gallery_ids, data, defaultTitle)
 				router.push("/dashboard/posts")
@@ -264,6 +276,7 @@ export default function PostForm({ post }: { post?: Post }) {
 					// twice, …): only blame the slug field when it really is the slug.
 					const text = String((e.response.data as { error?: unknown } | undefined)?.error ?? "")
 					if (getErrorCode(e) === "SLUG_LOCKED_WHILE_PUBLISHED" || /\bslug\b/i.test(text)) {
+						toast.error(getErrorMessage(e, "الرابط المختصر مستخدم بالفعل"))
 						setError("slug", { type: "server", message: getErrorMessage(e, "الرابط المختصر مستخدم بالفعل") })
 						return
 					}
@@ -282,7 +295,8 @@ export default function PostForm({ post }: { post?: Post }) {
 
 	return (
 		<>
-			<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<DraftNotice draft={draft} />
 				<div className="lg:col-span-2 space-y-6">
 					<TranslationTabs
 						fields={fields}
@@ -367,6 +381,7 @@ export default function PostForm({ post }: { post?: Post }) {
 												placeholder="إن تُرك فارغاً، يُستخدم العنوان الأصلي"
 												className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
 											/>
+											{errors.translations?.[index]?.meta_title && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.meta_title?.message}</p>}
 											<p className="mt-1.5 text-xs text-gray-600">يظهر في وسم &lt;title&gt; وفي عنوان نتيجة البحث. اتركه فارغاً للاستعمال التلقائي.</p>
 										</div>
 										<div>
@@ -378,6 +393,7 @@ export default function PostForm({ post }: { post?: Post }) {
 												placeholder="إن تُرك فارغاً، يُستخدم الملخص أو مقطع من المحتوى"
 												className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-base text-gray-900 bg-white placeholder:text-gray-400"
 											/>
+											{errors.translations?.[index]?.meta_description && <p className="mt-1 text-sm text-red-600">{errors.translations[index]?.meta_description?.message}</p>}
 											<p className="mt-1.5 text-xs text-gray-600">يظهر تحت العنوان في نتائج البحث. الحد الأمثل 150–160 حرفاً.</p>
 										</div>
 										<div>
@@ -494,7 +510,7 @@ export default function PostForm({ post }: { post?: Post }) {
 											onChange={(e) => g.onChange(e.target.checked ? [...g.value, cover] : g.value.filter((x) => x !== cover))}
 											className="h-4 w-4 text-primary rounded"
 										/>
-										إضافة هذه الصورة إلى معرض الصور؟
+										إضافة هذه الصورة إلى معرض الصور (كمسودة)؟
 									</label>
 								)
 							}}

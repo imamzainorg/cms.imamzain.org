@@ -96,23 +96,22 @@ export default function MediaPicker({
 		if (!files?.length) return
 		setUploading(true)
 		try {
-			let lastUploaded: MediaRecord | null = null
+			const uploaded: MediaRecord[] = []
 			for (const file of Array.from(files)) {
 				if (accept === "image" && !file.type.startsWith("image/")) {
 					toast.error(`${file.name}: ليس صورة`)
 					continue
 				}
-				const record = await mediaService.uploadFile(file)
-				lastUploaded = record
+				uploaded.push(await mediaService.uploadFile(file))
 			}
 			toast.success(`تم رفع ${files.length} ملف${files.length > 1 ? "ات" : ""}`)
 			await load(1, true, debouncedSearch)
 			setPage(1)
-			if (lastUploaded) {
-					const added = lastUploaded
-					if (multiple) setTicked((prev) => (prev.some((m) => m.id === added.id) ? prev : [...prev, added]))
-					else setSelected(added)
-				}
+			// What was just uploaded comes back selected: all of it when several can be picked.
+			if (uploaded.length) {
+				if (multiple) setTicked((prev) => [...prev, ...uploaded.filter((m) => !prev.some((p) => p.id === m.id))])
+				else setSelected(uploaded[uploaded.length - 1])
+			}
 		} catch (err) {
 			toast.error(getErrorMessage(err, "فشل الرفع"))
 		} finally {

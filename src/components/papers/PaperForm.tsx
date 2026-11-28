@@ -2,7 +2,10 @@
 
 import { useRef, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray, Controller } from "react-hook-form"
+import { useForm, useFieldArray, Controller, type FieldErrors } from "react-hook-form"
+import { useFormDraft } from "@/lib/use-form-draft"
+import { reportInvalid } from "@/lib/form-errors"
+import DraftNotice from "@/components/forms/DraftNotice"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import type { AcademicPaper } from "@/types"
@@ -133,7 +136,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, getValues, setValue, reset, formState: { errors } } =
 		useForm<PaperFormData>({
 			resolver: zodResolver(paperFormSchema),
 			defaultValues: buildDefaults(),
@@ -147,6 +150,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	}, [paper?.id])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
+	const draft = useFormDraft(paper ? null : "paper", { watch, getValues, reset }, buildDefaults)
 	const translations = watch("translations")
 	const documentLanguages = watch("document_languages")
 
@@ -223,6 +227,11 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		}
 	}
 
+	const onInvalid = (invalid: FieldErrors<PaperFormData>) => {
+		const lang = reportInvalid(invalid, translations)
+		if (lang) setActiveLang(lang)
+	}
+
 	const onSubmit = async (data: PaperFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -247,6 +256,7 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 		}
 		const handlers = {
 			onSuccess: () => {
+				draft.clear()
 				toast.success(paper ? "تم تحديث البحث" : "تم إنشاء البحث")
 				router.push("/dashboard/papers")
 				router.refresh()
@@ -263,7 +273,8 @@ export default function PaperForm({ paper }: { paper?: AcademicPaper }) {
 	if (loadingCats) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 
 	return (
-		<form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+		<form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+			<DraftNotice draft={draft} />
 			<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6 space-y-6">
 				<h3 className="text-lg font-medium text-gray-900">المعلومات الأساسية</h3>
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">

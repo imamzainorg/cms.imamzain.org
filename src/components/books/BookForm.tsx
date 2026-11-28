@@ -3,7 +3,10 @@
 import { useRef, useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useForm, useFieldArray, Controller } from "react-hook-form"
+import { useForm, useFieldArray, Controller, type FieldErrors } from "react-hook-form"
+import { useFormDraft } from "@/lib/use-form-draft"
+import { reportInvalid } from "@/lib/form-errors"
+import DraftNotice from "@/components/forms/DraftNotice"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import type { BookDetail } from "@/types"
@@ -167,7 +170,7 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, setError, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, getValues, setValue, setError, reset, formState: { errors } } =
 		useForm<BookFormData>({
 			resolver: zodResolver(bookFormSchema),
 			defaultValues: buildDefaults(),
@@ -179,6 +182,7 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 	}, [book?.id])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
+	const draft = useFormDraft(book ? null : presetParentId ? `book:${presetParentId}` : "book", { watch, getValues, reset }, buildDefaults)
 	const translations = watch("translations")
 	const documentLanguages = watch("document_languages")
 	const parentId = watch("parent_id") ?? null
@@ -199,7 +203,7 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 		const volumes = parent.parts ?? []
 		const nextNumber = volumes.reduce((m, p) => Math.max(m, p.part_number ?? 0), 0) + 1
 		const raw = pickTranslationsOrEmpty(parent.book_translations, parent.translation)
-		reset({
+		const prefill: BookFormData = {
 			...defaults,
 			category_id: parent.category_id,
 			cover_image_id: parent.cover_image_id,
@@ -219,7 +223,9 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 					series: t.series ?? "",
 				}))
 				: defaults.translations,
-		})
+		}
+		draft.setBlank(prefill)
+		if (!draft.restored.current) reset(prefill)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [presetParent.data, book])
 
@@ -269,6 +275,11 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 		}
 	}
 
+	const onInvalid = (invalid: FieldErrors<BookFormData>) => {
+		const lang = reportInvalid(invalid, translations)
+		if (lang) setActiveLang(lang)
+	}
+
 	const onSubmit = async (data: BookFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -280,14 +291,17 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 		// alone is fine there. Emptying part_number takes the book out of numbering.
 		const storedNumbered = book?.part_number != null
 		if (data.part_number != null && data.parts == null && !storedNumbered) {
+			toast.error("أدخل إجمالي الأجزاء مع رقم الجزء")
 			setError("parts", { type: "validate", message: "أدخل إجمالي الأجزاء مع رقم الجزء" })
 			return
 		}
 		if (data.parts != null && data.part_number == null) {
+			toast.error("أدخل رقم الجزء مع إجمالي الأجزاء")
 			setError("part_number", { type: "validate", message: "أدخل رقم الجزء مع إجمالي الأجزاء" })
 			return
 		}
 		if (data.part_number != null && data.parts != null && data.part_number > data.parts) {
+			toast.error("رقم الجزء أكبر من إجمالي الأجزاء")
 			setError("part_number", { type: "validate", message: "رقم الجزء أكبر من إجمالي الأجزاء" })
 			return
 		}
@@ -329,6 +343,7 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 		}
 		const handlers = {
 			onSuccess: () => {
+				draft.clear()
 				toast.success(book ? "تم تحديث الكتاب" : "تم إنشاء الكتاب")
 				router.push("/dashboard/books")
 				router.refresh()
@@ -337,14 +352,17 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 				if (getErrorStatus(e) === 409) {
 					const text = getServerErrorText(e) ?? ""
 					if (getErrorCode(e) === "SLUG_LOCKED_WHILE_PUBLISHED" || /\bslug\b/i.test(text)) {
+						toast.error(getErrorMessage(e, "الرابط المختصر مستخدم بالفعل"))
 						setError("slug", { type: "server", message: getErrorMessage(e, "الرابط المختصر مستخدم بالفعل") })
 						return
 					}
 					if (/isbn/i.test(text)) {
+						toast.error("يوجد كتاب آخر بهذا الرقم الدولي (ISBN).")
 						setError("isbn", { type: "server", message: "يوجد كتاب آخر بهذا الرقم الدولي (ISBN)." })
 						return
 					}
 					if (/part number/i.test(text)) {
+						toast.error("رقم الجزء مستخدم لجزء آخر من السلسلة نفسها.")
 						setError("part_number", { type: "server", message: "رقم الجزء مستخدم لجزء آخر من السلسلة نفسها." })
 						return
 					}
@@ -362,7 +380,8 @@ export default function BookForm({ book }: { book?: BookDetail }) {
 	if (loadingCats) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 
 	return (
-		<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+		<form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<DraftNotice draft={draft} />
 			<div className="lg:col-span-2 space-y-6">
 				<TranslationTabs
 					fields={fields}

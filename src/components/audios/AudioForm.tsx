@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, type FieldErrors } from "react-hook-form"
+import { useFormDraft } from "@/lib/use-form-draft"
+import { reportInvalid } from "@/lib/form-errors"
+import DraftNotice from "@/components/forms/DraftNotice"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import type { Audio, SpeakerTranslationItem } from "@/types"
@@ -125,7 +128,7 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, getValues, setValue, reset, formState: { errors } } =
 		useForm<AudioFormData>({
 			resolver: zodResolver(audioFormSchema),
 			defaultValues: buildDefaults(),
@@ -137,6 +140,7 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 	}, [audio?.id])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
+	const draft = useFormDraft(audio ? null : "audio", { watch, getValues, reset }, buildDefaults)
 	const translations = watch("translations")
 	const audioUrl = watch("audio_url")
 	const durationSeconds = watch("duration_seconds")
@@ -198,6 +202,11 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 		}
 	}
 
+	const onInvalid = (invalid: FieldErrors<AudioFormData>) => {
+		const lang = reportInvalid(invalid, translations)
+		if (lang) setActiveLang(lang)
+	}
+
 	const onSubmit = async (data: AudioFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -211,6 +220,7 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 		}))
 		const handlers = {
 			onSuccess: () => {
+				draft.clear()
 				toast.success(audio ? "تم تحديث التسجيل" : "تم إنشاء التسجيل")
 				router.push("/dashboard/audios")
 				router.refresh()
@@ -252,7 +262,8 @@ export default function AudioForm({ audio }: { audio?: Audio }) {
 	const audioBusy = analyzing || uploadingAudio
 
 	return (
-		<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+		<form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<DraftNotice draft={draft} />
 			<div className="lg:col-span-2 space-y-6">
 				{/* (a) الملف الصوتي */}
 				<div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6 space-y-4">

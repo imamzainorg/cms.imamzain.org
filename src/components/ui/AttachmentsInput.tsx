@@ -61,10 +61,11 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 		onChange(next)
 	}
 
-	const add = (m: MediaRecord) => {
+	// Appends the picked files in the order they were ticked, skipping any already attached.
+	const addMany = (picked: MediaRecord[]) => {
 		setOpen(false)
-		if (value.some((a) => a.id === m.id)) return
-		onChange([...value, toItem(m)])
+		const fresh = picked.filter((m) => !value.some((a) => a.id === m.id))
+		if (fresh.length) onChange([...value, ...fresh.map(toItem)])
 	}
 
 	return (
@@ -92,7 +93,7 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 													onChange={(e) => onGalleryChange(e.target.checked ? [...galleryIds, a.id] : galleryIds.filter((x) => x !== a.id))}
 													className="h-3.5 w-3.5 text-primary rounded"
 												/>
-												إضافة إلى معرض الصور
+												إضافة إلى معرض الصور (كمسودة)
 											</label>
 										)}
 									</div>
@@ -123,12 +124,12 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 				className={`rounded-lg border-2 border-dashed p-3 space-y-2 transition-colors ${dragging ? "border-primary bg-primary/5" : "border-gray-300"}`}
 			>
 				<p className="text-xs text-gray-500 text-center">اسحب الملفات هنا أو استخدم الأزرار</p>
-				<div className="flex gap-2">
+				<div className="flex flex-wrap gap-2">
 					<button
 						type="button"
 						disabled={uploading}
 						onClick={() => fileRef.current?.click()}
-						className="cursor-pointer flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-[hsl(var(--primary)/0.92)] disabled:opacity-50 disabled:cursor-not-allowed"
+						className="cursor-pointer flex-1 whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-[hsl(var(--primary)/0.92)] disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						{uploading ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.6} /> : <Upload className="h-4 w-4" strokeWidth={1.6} />}
 						{uploading ? "جارٍ الرفع..." : "رفع ملفات"}
@@ -137,7 +138,7 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 						type="button"
 						disabled={uploading}
 						onClick={() => setOpen(true)}
-						className="cursor-pointer flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.4)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] disabled:opacity-50"
+						className="cursor-pointer flex-1 whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-[hsl(var(--primary)/0.4)] rounded-md hover:bg-[hsl(var(--primary)/0.06)] disabled:opacity-50"
 					>
 						<Library className="h-4 w-4" strokeWidth={1.6} /> من مكتبة الوسائط
 					</button>
@@ -153,10 +154,12 @@ export default function AttachmentsInput({ value, onChange, galleryIds, onGaller
 
 			<MediaPicker
 				open={open}
+				multiple
 				accept="any"
-				title="اختر مرفقاً"
+				title="اختر المرفقات"
 				onClose={() => setOpen(false)}
-				onSelect={add}
+				onSelect={() => {}}
+				onSelectMany={addMany}
 			/>
 		</div>
 	)

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray, Controller } from "react-hook-form"
+import { useForm, useFieldArray, Controller, type FieldErrors } from "react-hook-form"
+import { useFormDraft } from "@/lib/use-form-draft"
+import { reportInvalid } from "@/lib/form-errors"
+import DraftNotice from "@/components/forms/DraftNotice"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import type { StaticPage } from "@/types"
@@ -95,7 +98,7 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 		}
 	}
 
-	const { register, handleSubmit, control, watch, setValue, setError, reset, formState: { errors } } =
+	const { register, handleSubmit, control, watch, getValues, setValue, setError, reset, formState: { errors } } =
 		useForm<StaticPageFormData>({
 			resolver: zodResolver(staticPageFormSchema),
 			defaultValues: buildDefaults(),
@@ -107,6 +110,7 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 	}, [page?.id])
 
 	const { fields, append, remove } = useFieldArray({ control, name: "translations" })
+	const draft = useFormDraft(page ? null : "static-page", { watch, getValues, reset }, buildDefaults)
 	const translations = watch("translations")
 	const isPublished = watch("is_published")
 	const slugValue = watch("slug")
@@ -148,6 +152,11 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 		})
 	}
 
+	const onInvalid = (invalid: FieldErrors<StaticPageFormData>) => {
+		const lang = reportInvalid(invalid, translations)
+		if (lang) setActiveLang(lang)
+	}
+
 	const onSubmit = (data: StaticPageFormData) => {
 		const defaults = data.translations.filter((t) => t.is_default).length
 		if (defaults !== 1) {
@@ -168,6 +177,7 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 		}
 		const handlers = {
 			onSuccess: () => {
+				draft.clear()
 				toast.success(page ? "تم تحديث الصفحة" : "تم إنشاء الصفحة")
 				router.push("/dashboard/static-pages")
 				router.refresh()
@@ -176,6 +186,7 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 				if (getErrorStatus(e) === 409) {
 					const text = getServerErrorText(e) ?? ""
 					if (getErrorCode(e) === "SLUG_LOCKED_WHILE_PUBLISHED" || /slug/i.test(text)) {
+						toast.error(getErrorMessage(e, "الرابط المختصر مستخدم بالفعل"))
 						setError("slug", { type: "server", message: getErrorMessage(e, "الرابط المختصر مستخدم بالفعل") })
 						return
 					}
@@ -192,7 +203,8 @@ export default function StaticPageForm({ page }: { page?: StaticPage }) {
 
 	return (
 		<>
-			<form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<DraftNotice draft={draft} />
 				<div className="lg:col-span-2 space-y-6">
 					<TranslationTabs
 						fields={fields}
